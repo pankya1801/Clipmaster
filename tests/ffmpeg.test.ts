@@ -77,3 +77,11 @@ describe.skipIf(!hasFfmpeg)("real ffmpeg export", () => {
     expect(plan.duration).toBe(10);
   });
 });
+
+describe("transform helpers", () => {
+  it("fits media inside the canvas with even sizes", async () => {
+    const { fittedSize } = await import("../src/core/ffmpeg");
+    expect(fittedSize(1920, 1080, 1080, 1920)).toEqual({ w: 1080, h: 608 });
+    expect(fittedSize(undefined, undefined, 640, 360)).toEqual({ w: 640, h: 360 });
+  });
+});

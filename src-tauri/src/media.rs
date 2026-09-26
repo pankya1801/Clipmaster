@@ -7,22 +7,24 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::ExportState;
 
-/// Resolve an FFmpeg tool: `CLIPMASTER_FFMPEG_DIR`, then next to the app, then PATH.
+/// Resolve a helper program. Order: `CLIPMASTER_FFMPEG_DIR`, the copy bundled
+/// next to the app (`clipmaster-<name>`, prefixed so Linux packages don't clash
+/// with system FFmpeg in /usr/bin), then `<name>` on PATH.
 fn tool(name: &str) -> PathBuf {
-    let exe = if cfg!(windows) { format!("{name}.exe") } else { name.to_string() };
+    let exe = |n: &str| if cfg!(windows) { format!("{n}.exe") } else { n.to_string() };
     if let Ok(dir) = std::env::var("CLIPMASTER_FFMPEG_DIR") {
-        let p = PathBuf::from(dir).join(&exe);
+        let p = PathBuf::from(dir).join(exe(name));
         if p.exists() {
             return p;
         }
     }
     if let Some(dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.to_path_buf())) {
-        let p = dir.join(&exe);
+        let p = dir.join(exe(&format!("clipmaster-{name}")));
         if p.exists() {
             return p;
         }
     }
-    PathBuf::from(exe)
+    PathBuf::from(exe(name))
 }
 
 fn command(name: &str) -> Command {
@@ -268,7 +270,8 @@ pub async fn transcribe(
         if !ok.success() {
             return Err("Could not extract audio for transcription".into());
         }
-        let mut cmd = Command::new(&whisper_bin);
+        // Empty path = the whisper-cli bundled with Clipmaster (or on PATH).
+        let mut cmd = if whisper_bin.trim().is_empty() { command("whisper-cli") } else { Command::new(&whisper_bin) };
         cmd.args(["-m", &model, "-f"]).arg(&wav);
         cmd.args(["-osrt", "-ml", "1", "-sow", "-np", "-l", if language.is_empty() { "auto" } else { &language }]);
         cmd.arg("-of").arg(&base);
@@ -282,6 +285,86 @@ pub async fn transcribe(
         let srt = std::fs::read_to_string(&srt_path).map_err(|e| e.to_string())?;
         let _ = std::fs::remove_file(&srt_path);
         Ok(srt)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[derive(Serialize)]
+pub struct WhisperModel {
+    name: &'static str,
+    label: &'static str,
+    size_mb: u32,
+    path: Option<String>,
+}
+
+const MODELS: &[(&str, &str, u32)] = &[
+    ("tiny.en", "Tiny · English · fastest", 75),
+    ("base.en", "Base · English · recommended", 142),
+    ("base", "Base · 99 languages", 142),
+    ("small", "Small · 99 languages · most accurate", 466),
+];
+
+fn models_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("models");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+#[tauri::command]
+pub fn whisper_models(app: AppHandle) -> Result<Vec<WhisperModel>, String> {
+    let dir = models_dir(&app)?;
+    Ok(MODELS
+        .iter()
+        .map(|(name, label, size_mb)| {
+            let p = dir.join(format!("ggml-{name}.bin"));
+            WhisperModel { name, label, size_mb: *size_mb, path: p.exists().then(|| p.to_string_lossy().into_owned()) }
+        })
+        .collect())
+}
+
+#[derive(Clone, Serialize)]
+struct DownloadProgress {
+    received: u64,
+    total: u64,
+}
+
+/// Download a whisper.cpp model into the app data folder; returns its path.
+#[tauri::command]
+pub async fn download_model(app: AppHandle, name: String) -> Result<String, String> {
+    if !MODELS.iter().any(|(n, _, _)| *n == name) {
+        return Err("Unknown model".into());
+    }
+    let dir = models_dir(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let url = format!("https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-{name}.bin");
+        let resp = ureq::get(&url).call().map_err(|e| format!("Download failed: {e}"))?;
+        let total: u64 = resp.header("Content-Length").and_then(|v| v.parse().ok()).unwrap_or(0);
+        let part = dir.join(format!("ggml-{name}.bin.part"));
+        let mut file = std::fs::File::create(&part).map_err(|e| e.to_string())?;
+        let mut reader = resp.into_reader();
+        let mut buf = vec![0u8; 1 << 16];
+        let (mut received, mut last) = (0u64, 0u64);
+        loop {
+            let n = reader.read(&mut buf).map_err(|e| format!("Download interrupted: {e}"))?;
+            if n == 0 {
+                break;
+            }
+            std::io::Write::write_all(&mut file, &buf[..n]).map_err(|e| e.to_string())?;
+            received += n as u64;
+            if received - last > 1 << 20 {
+                last = received;
+                let _ = app.emit("model-progress", DownloadProgress { received, total });
+            }
+        }
+        if total > 0 && received != total {
+            let _ = std::fs::remove_file(&part);
+            return Err("Download incomplete, please try again".into());
+        }
+        let dest = dir.join(format!("ggml-{name}.bin"));
+        std::fs::rename(&part, &dest).map_err(|e| e.to_string())?;
+        Ok(dest.to_string_lossy().into_owned())
     })
     .await
     .map_err(|e| e.to_string())?

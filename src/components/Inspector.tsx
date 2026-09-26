@@ -1,5 +1,5 @@
 import { effectById, transitionById, TRANSITIONS } from "../core/effects";
-import { clipDuration, updateClip } from "../core/project";
+import { clipDuration, IDENTITY_TRANSFORM, PIP_PRESETS, updateClip } from "../core/project";
 import { ASPECT_PRESETS, MediaClip, TextClip } from "../core/types";
 import { useEditor } from "../store";
 import { formatTime } from "./Preview";
@@ -50,6 +50,8 @@ function MediaInspector({ clip }: { clip: MediaClip }) {
       )}
       {visual && (
         <>
+          <div className="section-title">Transform</div>
+          <TransformControls clip={clip} set={set} />
           <div className="section-title">Transitions</div>
           {(["transIn", "transOut"] as const).map((key) => {
             const side = key === "transIn" ? "in" : "out";
@@ -154,5 +156,28 @@ function ProjectInspector() {
         ].map(([k, v]) => <div key={k} className="row"><span className="kbd">{k}</span><span>{v}</span></div>)}
       </div>
     </>
+  );
+}
+
+function TransformControls({ clip, set }: { clip: MediaClip; set: (p: Partial<MediaClip>) => void }) {
+  const t = clip.transform ?? IDENTITY_TRANSFORM;
+  const put = (patch: Partial<typeof t>) => set({ transform: { ...t, ...patch } });
+  return (
+    <div className="fx-item">
+      <div className="row" style={{ flexWrap: "wrap", gap: 4 }}>
+        {PIP_PRESETS.map((p) => (
+          <button key={p.label} className="small" onClick={() => set({ transform: p.t })} title={`Picture-in-picture: ${p.label}`}>
+            {p.label}
+          </button>
+        ))}
+        <button className="small" onClick={() => set({ transform: undefined })} disabled={!clip.transform}>Reset</button>
+      </div>
+      <Num label="Scale" value={t.scale * 100} min={5} max={300} step={1} suffix="%" onChange={(v) => put({ scale: v / 100 })} />
+      <Num label="Position X" value={t.x * 100} min={-50} max={150} step={1} suffix="%" onChange={(v) => put({ x: v / 100 })} />
+      <Num label="Position Y" value={t.y * 100} min={-50} max={150} step={1} suffix="%" onChange={(v) => put({ y: v / 100 })} />
+      <Num label="Rotation" value={t.rotation} min={0} max={359} step={1} suffix="°" onChange={(rotation) => put({ rotation })} />
+      <Num label="Opacity" value={t.opacity * 100} min={0} max={100} step={1} suffix="%" onChange={(v) => put({ opacity: v / 100 })} />
+      <p className="small muted" style={{ margin: 0 }}>Tip: drag the clip in the preview to move it, scroll to resize.</p>
+    </div>
   );
 }

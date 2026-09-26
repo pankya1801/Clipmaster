@@ -21,6 +21,8 @@ pub fn run() {
             media::detect_silence,
             media::transcribe,
             media::fonts_dir,
+            media::whisper_models,
+            media::download_model,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Clipmaster");

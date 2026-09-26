@@ -7,7 +7,7 @@ import { applyAutoEdit, keptRanges, parseSilenceDetect, DEFAULT_AUTO_EDIT } from
 import { assColor, buildAss, CAPTION_TEMPLATES, groupCaptionLines, parseSrt, toSrt } from "../src/core/captions";
 import { EFFECTS, TRANSITIONS } from "../src/core/effects";
 import { buildExportPlan } from "../src/core/ffmpeg";
-import { addAsset, clipsOnTrack, createProject, placeAsset, updateClip } from "../src/core/project";
+import { addAsset, addTrack, clipsOnTrack, createProject, placeAsset, updateClip } from "../src/core/project";
 import type { CaptionWord, MediaClip } from "../src/core/types";
 
 const words: CaptionWord[] = "Hello world this is Clipmaster. It makes captions easy!"
@@ -110,6 +110,26 @@ describe.skipIf(!hasFfmpeg)("real ffmpeg: every effect, transition and caption t
     const side = TRANSITIONS.find((t) => t.id === id)!.side;
     render((c, p) => updateClip(p, c.id, side === "in" ? { transIn: { id, duration: 0.5 } } : { transOut: { id, duration: 0.5 } }), `tr-${id}`);
   });
+  it("picture-in-picture: scaled, rotated, semi-transparent clip with effects over a background", () => {
+    const pipOut = join(dir, "pip.mp4");
+    let p = createProject();
+    p = { ...p, settings: { width: 320, height: 240, fps: 24 } };
+    p = addAsset(p, { id: "v", path: src, name: "v", kind: "video", duration: 3, hasAudio: true, width: 320, height: 240 });
+    p = addTrack(p, "video"); // new top track
+    const bg = placeAsset(p, "v", "t_v1");
+    const topTrack = bg.project.tracks.find((t) => t.kind === "video")!.id;
+    const pip = placeAsset(bg.project, "v", topTrack, 0);
+    p = updateClip(pip.project, pip.clipId!, {
+      transform: { x: 0.75, y: 0.75, scale: 0.4, rotation: 15, opacity: 0.8 },
+      effects: [{ id: "pixelate", amount: 0.5 }, { id: "shake", amount: 0.5 }],
+      transIn: { id: "slide-up", duration: 0.5 },
+    });
+    const plan = buildExportPlan(p, { outputPath: pipOut, tempDir: dir, quality: "draft", fontsDir });
+    expect(plan.args.join(" ")).toContain("rotate=");
+    execFileSync("ffmpeg", plan.args, { stdio: "pipe" });
+    expect(existsSync(pipOut)).toBe(true);
+  });
+
   it.each(CAPTION_TEMPLATES.map((t) => t.id))("caption template %s", (id) => {
     render((_c, p) => ({ ...p, captions: words, captionSettings: { templateId: id, scale: 1 } }), `cap-${id}`);
   });

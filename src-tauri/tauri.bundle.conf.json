@@ -1,0 +1,7 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "externalBin": ["binaries/clipmaster-ffmpeg", "binaries/clipmaster-ffprobe", "binaries/clipmaster-whisper-cli"],
+    "resources": ["fonts/*", "binaries/FFMPEG-LICENSE.txt", "binaries/WHISPER-LICENSE.txt"]
+  }
+}

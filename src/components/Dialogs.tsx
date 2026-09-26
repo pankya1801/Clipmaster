@@ -3,7 +3,7 @@ import { DEFAULT_AUTO_EDIT } from "../core/autoedit";
 import { EFFECTS } from "../core/effects";
 import { buildExportPlan, ExportQuality } from "../core/ffmpeg";
 import { projectDuration } from "../core/project";
-import { errorText, loadWhisperConfig, runAutoEdit, saveWhisperConfig } from "../lib/actions";
+import { errorText, loadWhisperConfig, runAutoEdit, saveWhisperConfig, WhisperModel } from "../lib/actions";
 import { invoke, isTauri, saveDialog } from "../lib/backend";
 import { useEditor } from "../store";
 
@@ -128,7 +128,7 @@ export function AutoEditDialog({ onClose }: { onClose: () => void }) {
         </div>
       )}
       <label className="check"><input type="checkbox" checked={opts.punchIn} onChange={(e) => set({ punchIn: e.target.checked })} /> Punch-in zoom on every other cut</label>
-      <label className="check"><input type="checkbox" checked={opts.captions} onChange={(e) => set({ captions: e.target.checked })} /> Auto captions (needs whisper.cpp — see Settings)</label>
+      <label className="check"><input type="checkbox" checked={opts.captions} onChange={(e) => set({ captions: e.target.checked })} /> Auto captions (download a model once in Settings)</label>
       <div className="row">
         <label className="field grow"><span>Transition at cuts</span>
           <select value={opts.transition} onChange={(e) => set({ transition: e.target.value as typeof opts.transition })}>
@@ -171,10 +171,39 @@ export function AutoEditDialog({ onClose }: { onClose: () => void }) {
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [cfg, setCfg] = useState(loadWhisperConfig());
   const [ffmpeg, setFfmpeg] = useState<string>("checking…");
+  const [models, setModels] = useState<WhisperModel[]>([]);
+  const [downloading, setDownloading] = useState<{ name: string; pct: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [advanced, setAdvanced] = useState(!!(cfg.bin || cfg.model));
+
+  const refresh = () => isTauri && invoke<WhisperModel[]>("whisper_models").then(setModels).catch(() => {});
   useEffect(() => {
     if (!isTauri) return setFfmpeg("desktop app only");
     invoke<{ ffmpeg?: string }>("ffmpeg_status").then((s) => setFfmpeg(s.ffmpeg ?? "not found"));
+    refresh();
+    let un: (() => void) | undefined;
+    import("@tauri-apps/api/event").then(({ listen }) =>
+      listen<{ received: number; total: number }>("model-progress", (e) =>
+        setDownloading((d) => (d ? { ...d, pct: e.payload.total ? e.payload.received / e.payload.total : 0 } : d))
+      ).then((u) => (un = u))
+    );
+    return () => un?.();
   }, []);
+
+  const download = async (name: string) => {
+    setError(null);
+    setDownloading({ name, pct: 0 });
+    try {
+      await invoke("download_model", { name });
+      setCfg((c) => ({ ...c, modelName: name }));
+      await refresh();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   const pick = async (key: "bin" | "model") => {
     if (!isTauri) return;
     const { open } = await import("@tauri-apps/plugin-dialog");
@@ -184,19 +213,42 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Settings" onClose={onClose}>
       <div><b>FFmpeg</b><div className="muted small" style={{ userSelect: "text" }}>{ffmpeg}</div></div>
-      <div className="section-title">Auto captions (whisper.cpp, runs offline)</div>
-      <p className="muted small">
-        Install <a href="https://github.com/ggml-org/whisper.cpp" target="_blank" rel="noreferrer">whisper.cpp</a> and download a model such as
-        ggml-base.en.bin or ggml-small.bin. Your audio never leaves your computer.
-      </p>
-      <label className="field"><span>whisper.cpp program (whisper-cli)</span>
-        <div className="row"><input type="text" value={cfg.bin} onChange={(e) => setCfg({ ...cfg, bin: e.target.value })} placeholder="/path/to/whisper-cli" /><button onClick={() => pick("bin")}>Browse</button></div></label>
-      <label className="field"><span>Model file</span>
-        <div className="row"><input type="text" value={cfg.model} onChange={(e) => setCfg({ ...cfg, model: e.target.value })} placeholder="/path/to/ggml-base.en.bin" /><button onClick={() => pick("model")}>Browse</button></div></label>
-      <label className="field"><span>Language</span>
+      <div className="section-title">Auto captions</div>
+      <p className="muted small" style={{ margin: 0 }}>Speech is transcribed on your computer with whisper.cpp. Your audio never leaves your device. Download one model once:</p>
+      <div style={{ display: "grid", gap: 6 }}>
+        {models.map((m) => (
+          <div key={m.name} className="fx-item">
+            <div className="row">
+              <label className="check grow">
+                <input type="radio" name="model" disabled={!m.path} checked={!!m.path && cfg.modelName === m.name && !cfg.model} onChange={() => setCfg({ ...cfg, modelName: m.name, model: "" })} />
+                {m.label} <span className="muted small">{m.size_mb} MB</span>
+              </label>
+              {m.path ? <span className="small" style={{ color: "var(--audio)" }}>✓ Ready</span> : (
+                <button className="small" disabled={!!downloading} onClick={() => download(m.name)}>
+                  {downloading?.name === m.name ? `${Math.round(downloading.pct * 100)}%` : "Download"}
+                </button>
+              )}
+            </div>
+            {downloading?.name === m.name && <div className="progress"><div style={{ width: `${Math.round(downloading.pct * 100)}%` }} /></div>}
+          </div>
+        ))}
+        {!isTauri && <p className="small muted">Available in the desktop app.</p>}
+      </div>
+      {error && <p className="small" style={{ color: "var(--danger)" }}>{error}</p>}
+      <label className="field"><span>Spoken language</span>
         <select value={cfg.language} onChange={(e) => setCfg({ ...cfg, language: e.target.value })}>
-          {[["auto", "Detect automatically"], ["en", "English"], ["hi", "Hindi"], ["es", "Spanish"], ["pt", "Portuguese"], ["fr", "French"], ["de", "German"], ["id", "Indonesian"], ["ja", "Japanese"], ["ko", "Korean"], ["zh", "Chinese"], ["ar", "Arabic"], ["ru", "Russian"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          {[["auto", "Detect automatically"], ["en", "English"], ["hi", "Hindi"], ["es", "Spanish"], ["pt", "Portuguese"], ["fr", "French"], ["de", "German"], ["it", "Italian"], ["id", "Indonesian"], ["tr", "Turkish"], ["ja", "Japanese"], ["ko", "Korean"], ["zh", "Chinese"], ["ar", "Arabic"], ["ru", "Russian"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select></label>
+      <p className="muted small" style={{ margin: 0 }}>English-only models (".en") are faster; use a 99-language model for other languages.</p>
+      <label className="check"><input type="checkbox" checked={advanced} onChange={(e) => setAdvanced(e.target.checked)} /> Advanced: use my own whisper.cpp / model</label>
+      {advanced && (
+        <>
+          <label className="field"><span>whisper-cli program (blank = built-in)</span>
+            <div className="row"><input type="text" value={cfg.bin} onChange={(e) => setCfg({ ...cfg, bin: e.target.value })} placeholder="built-in" /><button onClick={() => pick("bin")}>Browse</button></div></label>
+          <label className="field"><span>Model file (blank = downloaded model above)</span>
+            <div className="row"><input type="text" value={cfg.model} onChange={(e) => setCfg({ ...cfg, model: e.target.value })} placeholder="downloaded model" /><button onClick={() => pick("model")}>Browse</button></div></label>
+        </>
+      )}
       <div className="row"><span className="grow" /><button onClick={onClose}>Cancel</button>
         <button className="primary" onClick={() => { saveWhisperConfig(cfg); onClose(); }}>Save</button></div>
     </Modal>

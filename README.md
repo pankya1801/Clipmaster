@@ -14,7 +14,8 @@ Everything you pay CapCut Pro or Filmora for, with no subscription, no watermark
 | **Timeline editing** | Multi-track video, audio and text. Trim, split, move and snap clips, ripple delete, duplicate, and unlimited undo/redo. |
 | **Any format** | 16:9, 9:16 (Reels / Shorts / TikTok), 1:1, 4:5, 720p–4K, 24–60 fps. |
 | **25 caption templates** | Word-by-word highlight, karaoke, one-word pop, neon, boxed, typewriter and more. Captions are rendered with real outlines and animations. |
-| **Auto captions** | Runs [whisper.cpp](https://github.com/ggml-org/whisper.cpp) locally, so your audio never leaves your computer. You can also import or export SRT files. |
+| **Auto captions** | Runs [whisper.cpp](https://github.com/ggml-org/whisper.cpp) locally, so your audio never leaves your computer. One-click model download; you can also import or export SRT files. |
+| **Picture-in-picture** | Position, scale, rotation and opacity for any clip. Drag it in the preview, or use the corner presets. |
 | **32 effects** | Color grading (cinematic teal & orange, vintage, noir, warm/cool…), stylize (vignette, film grain, glitch, RGB split, pixelate…) and motion (Ken Burns, slow zoom, punch-in, camera shake). |
 | **11 transitions** | Cross dissolve, fade, flash, four slides, zoom pop, blur in, fade out, dip to white. |
 | **✨ Auto Edit** | One click removes silences and pauses, hides jump cuts with punch-in zooms, adds captions and applies a color look. |
@@ -24,25 +25,31 @@ Everything you pay CapCut Pro or Filmora for, with no subscription, no watermark
 
 ## Install (users)
 
-Download the installer for your system from the **Releases** page, then install FFmpeg:
+Download the installer for your system from the **Releases** page and run it. FFmpeg and whisper.cpp come bundled, so there is nothing else to set up.
 
-- **Windows:** `winget install Gyan.FFmpeg`, or put `ffmpeg.exe` and `ffprobe.exe` next to `Clipmaster.exe`
-- **macOS:** `brew install ffmpeg`
-- **Linux:** `sudo apt install ffmpeg` (or your distro's package)
+- **Windows:** `.msi` or `-setup.exe`
+- **macOS:** `.dmg` for Apple Silicon (`aarch64`) or Intel (`x64`). The app isn't notarized yet, so right-click → **Open** the first time.
+- **Linux:** `.deb`, `.rpm` or `.AppImage`
 
-**Auto captions (optional):** build or download [whisper.cpp](https://github.com/ggml-org/whisper.cpp), download a model (for example [`ggml-base.en.bin`](https://huggingface.co/ggerganov/whisper.cpp/tree/main) for English or `ggml-small.bin` for other languages), then open **Settings** in Clipmaster and point it at `whisper-cli` and the model file.
+**Auto captions:** open **⚙ Settings → Auto captions** and download a model once (75–466 MB). After that, captions work offline.
 
 ## Develop
 
-Requirements: [Node 20+](https://nodejs.org), [Rust](https://rustup.rs), FFmpeg, and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS.
+Requirements: [Node 20+](https://nodejs.org), [Rust](https://rustup.rs), FFmpeg on your `PATH`, and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS. For auto captions in development, put `whisper-cli` on your `PATH` or set its path in Settings.
 
 ```bash
 npm install
 npm run tauri dev      # run the desktop app with hot reload
 npm test               # unit tests + real FFmpeg render tests
 npm run typecheck
-npm run tauri build    # build an installer for your OS
+npm run tauri build    # build an installer for your OS (uses FFmpeg from PATH)
+
+# Build an installer with FFmpeg + whisper.cpp bundled (what releases use):
+scripts/fetch-sidecars.sh x86_64-unknown-linux-gnu   # or your target triple
+npm run tauri build -- --config src-tauri/tauri.bundle.conf.json
 ```
+
+Pushing a tag like `v0.2.0` runs the Release workflow, which builds installers for all platforms as a draft GitHub release.
 
 `npm run dev` also opens the editor in a normal browser for quick UI work. Import there is temporary and export is disabled.
 
@@ -64,9 +71,7 @@ The preview plays your media directly and approximates effects with CSS. Export 
 
 ## Roadmap
 
-- Bundle FFmpeg in the installers
-- Keyframes (position, scale, opacity)
-- Picture-in-picture transform controls
+- Keyframe animation for position, scale and opacity
 - Stickers, overlays and LUT import
 - Beat-synced auto edit for music videos
 - Background removal and noise reduction
@@ -77,4 +82,6 @@ Pull requests are welcome. Run `npm test` and `npm run typecheck` before opening
 
 ## License
 
-[MIT](LICENSE) © 2026 The Clipmaster Authors. The bundled fonts are under the [SIL Open Font License](src-tauri/fonts/OFL.txt).
+[MIT](LICENSE) © 2026 The Clipmaster Authors.
+
+Third-party components shipped with the installers keep their own licenses: FFmpeg ([GPL](https://ffmpeg.org/legal.html), run as a separate program; builds from [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) and [martin-riedl.de](https://ffmpeg.martin-riedl.de)), [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (MIT) and the caption fonts ([SIL Open Font License](src-tauri/fonts/OFL.txt)). Their license texts are included in the app bundle.
