@@ -17,7 +17,15 @@ jobs:
       - name: System packages (Tauri + FFmpeg)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev libayatana-appindicator3-dev ffmpeg
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev libayatana-appindicator3-dev
+      # Test against the same FFmpeg build the installers ship (the distro's is older and
+      # some filters, e.g. afftdn, behave differently). Keep in sync with fetch-sidecars.sh.
+      - name: FFmpeg (same build as releases)
+        run: |
+          curl -fsSL -o ff.tar.xz https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-linux64-gpl-8.1.tar.xz
+          tar -xJf ff.tar.xz
+          echo "$PWD/ffmpeg-n8.1-latest-linux64-gpl-8.1/bin" >> "$GITHUB_PATH"
+      - run: ffmpeg -version | head -1
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
