@@ -6,6 +6,9 @@ set -euo pipefail
 
 TRIPLE="${1:?target triple required, e.g. x86_64-unknown-linux-gnu}"
 WHISPER_TAG="${WHISPER_TAG:-v1.9.4}"
+# Pin a stable FFmpeg release (nightly "master" builds have crashed in filters we use).
+FFMPEG_VER="${FFMPEG_VER:-8.1}"
+BTBN=https://github.com/BtbN/FFmpeg-Builds/releases/download/latest
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/src-tauri/binaries"
 WORK="$(mktemp -d)"
@@ -17,17 +20,17 @@ cd "$WORK"
 echo "==> FFmpeg for $TRIPLE"
 case "$TRIPLE" in
   x86_64-unknown-linux-gnu)
-    curl -fsSL -o ff.tar.xz https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
+    curl -fsSL -o ff.tar.xz "$BTBN/ffmpeg-n$FFMPEG_VER-latest-linux64-gpl-$FFMPEG_VER.tar.xz"
     tar -xJf ff.tar.xz
-    D=ffmpeg-master-latest-linux64-gpl
+    D="ffmpeg-n$FFMPEG_VER-latest-linux64-gpl-$FFMPEG_VER"
     cp "$D/bin/ffmpeg" "$OUT/clipmaster-ffmpeg-$TRIPLE"
     cp "$D/bin/ffprobe" "$OUT/clipmaster-ffprobe-$TRIPLE"
     cp "$D/LICENSE.txt" "$OUT/FFMPEG-LICENSE.txt"
     ;;
   x86_64-pc-windows-msvc)
-    curl -fsSL -o ff.zip https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip
+    curl -fsSL -o ff.zip "$BTBN/ffmpeg-n$FFMPEG_VER-latest-win64-gpl-$FFMPEG_VER.zip"
     unzip -q ff.zip
-    D=ffmpeg-master-latest-win64-gpl
+    D="ffmpeg-n$FFMPEG_VER-latest-win64-gpl-$FFMPEG_VER"
     cp "$D/bin/ffmpeg.exe" "$OUT/clipmaster-ffmpeg-$TRIPLE.exe"
     cp "$D/bin/ffprobe.exe" "$OUT/clipmaster-ffprobe-$TRIPLE.exe"
     cp "$D/LICENSE.txt" "$OUT/FFMPEG-LICENSE.txt"
