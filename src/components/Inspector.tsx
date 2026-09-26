@@ -47,6 +47,9 @@ function MediaInspector({ clip }: { clip: MediaClip }) {
           <Num label="Volume" value={clip.volume * 100} min={0} max={200} step={1} suffix="%" onChange={(v) => set({ volume: v / 100 })} />
           <Num label="Audio fade in" value={clip.fadeIn} min={0} max={Math.min(5, dur)} suffix="s" onChange={(fadeIn) => set({ fadeIn })} />
           <Num label="Audio fade out" value={clip.fadeOut} min={0} max={Math.min(5, dur)} suffix="s" onChange={(fadeOut) => set({ fadeOut })} />
+          <label className="check" title="Removes background hiss and hum, cuts rumble and evens out volume. Applied on export.">
+            <input type="checkbox" checked={!!clip.denoise} onChange={(e) => set({ denoise: e.target.checked || undefined })} /> 🎙 Clean up voice (noise reduction)
+          </label>
         </>
       )}
       {visual && (

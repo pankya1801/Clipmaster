@@ -15,6 +15,8 @@ export interface ExportOptions {
   fontFile?: string;
   /** Directory of bundled fonts for captions. */
   fontsDir?: string;
+  /** Normalise loudness to -14 LUFS (YouTube / TikTok / Instagram target). */
+  normalizeLoudness?: boolean;
   /** Override output size (defaults to project settings). */
   width?: number;
   height?: number;
@@ -32,6 +34,13 @@ const QUALITY: Record<ExportQuality, { preset: string; crf: number }> = {
   standard: { preset: "medium", crf: 21 },
   high: { preset: "slow", crf: 17 },
 };
+
+/**
+ * Voice clean-up: rumble cut, FFT noise reduction and non-local-means
+ * denoise. Measured on white noise at -35/-50 dBFS: hiss drops by 35-40 dB
+ * while speech-band level is kept (see tests/features.test.ts).
+ */
+export const VOICE_CLEANUP = ["highpass=f=80", "afftdn=nr=20:nf=-40", "anlmdn=s=7"];
 
 const n = (v: number) => Number(v.toFixed(4)).toString();
 
@@ -189,6 +198,7 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
       `atrim=start=${n(c.in)}:end=${n(c.out)}`,
       "asetpts=PTS-STARTPTS",
       ...atempoChain(c.speed),
+      ...(c.denoise ? VOICE_CLEANUP : []),
       `volume=${n(c.volume)}`,
       c.fadeIn > 0 ? `afade=t=in:st=0:d=${n(c.fadeIn)}` : "",
       c.fadeOut > 0 ? `afade=t=out:st=${n(Math.max(0, dur - c.fadeOut))}:d=${n(c.fadeOut)}` : "",
@@ -200,7 +210,8 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
   });
   if (audioClips.length) {
     const labels = audioClips.map((_, i) => `[a${i}]`).join("");
-    filters.push(`${labels}amix=inputs=${audioClips.length}:duration=longest:normalize=0,apad[aout]`);
+    const loud = opts.normalizeLoudness ? ",loudnorm=I=-14:TP=-1.5:LRA=11" : "";
+    filters.push(`${labels}amix=inputs=${audioClips.length}:duration=longest:normalize=0${loud},aresample=48000,apad[aout]`);
   } else {
     filters.push(`anullsrc=r=48000:cl=stereo[aout]`);
   }

@@ -30,6 +30,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
   const project = useEditor((s) => s.project);
   const [quality, setQuality] = useState<ExportQuality>("standard");
   const [res, setRes] = useState(0);
+  const [loudness, setLoudness] = useState(true);
   const [progress, setProgress] = useState<number | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const total = projectDuration(project);
@@ -60,7 +61,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
       setProgress(0);
       const [tempDir, fontsDir] = await Promise.all([invoke<string>("temp_dir"), invoke<string | null>("fonts_dir")]);
       const fontFile = fontsDir ? `${fontsDir}/Montserrat-ExtraBold.ttf` : undefined;
-      const plan = buildExportPlan(project, { outputPath: out, tempDir, quality, fontsDir: fontsDir ?? undefined, fontFile, ...size });
+      const plan = buildExportPlan(project, { outputPath: out, tempDir, quality, fontsDir: fontsDir ?? undefined, fontFile, normalizeLoudness: loudness, ...size });
       await invoke("export_video", { args: plan.args, files: plan.files });
       setProgress(1);
       setStatus(`Saved to ${out}`);
@@ -90,6 +91,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
           </select>
         </label>
       </div>
+      <label className="check"><input type="checkbox" checked={loudness} onChange={(e) => setLoudness(e.target.checked)} disabled={running} /> Normalise loudness for social media (−14 LUFS)</label>
       <p className="muted small">MP4 (H.264 + AAC) · {size.width}×{size.height} · {project.settings.fps} fps · {total.toFixed(1)}s · no watermark</p>
       {progress != null && <div className="progress"><div style={{ width: `${Math.round(progress * 100)}%` }} /></div>}
       {status && <p className="small" style={{ userSelect: "text", whiteSpace: "pre-wrap" }}>{status}</p>}
