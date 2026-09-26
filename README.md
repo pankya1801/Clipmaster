@@ -2,10 +2,27 @@
 
 <h1 align="center">Clipmaster</h1>
 
-<p align="center"><b>A free, open-source desktop video editor.</b><br>
-Everything you pay CapCut Pro or Filmora for, with no subscription, no watermark and no account.</p>
+<p align="center"><b>The free, open-source video editor for creators.</b><br>
+Captions, effects, auto-edit and 4K export: no subscription, no watermark, no account, no cloud.</p>
 
----
+<p align="center">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8b5cf6"></a>
+  <img alt="Windows, macOS, Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-3b82f6">
+  <img alt="Offline" src="https://img.shields.io/badge/works-offline-10b981">
+  <a href="../../releases"><img alt="Download" src="https://img.shields.io/badge/download-latest-f59e0b"></a>
+</p>
+
+<p align="center"><img src="docs/screenshots/editor.png" alt="Clipmaster editor with timeline, effects and animated captions" width="100%"></p>
+
+## Why Clipmaster?
+
+Many popular editors keep auto-captions, effects or watermark-free export behind a paid plan, and they often upload your footage to their servers. Clipmaster does all of that **on your computer, for free, forever**:
+
+- ✅ **No watermark, no export limits, up to 4K**
+- ✅ **Auto captions that stay private.** Speech-to-text runs locally with whisper.cpp.
+- ✅ **One-click Auto Edit** for talking videos (cuts out pauses) and music montages (cuts to the beat)
+- ✅ **Made for Reels, Shorts and TikTok:** 9:16, 1:1 and 4:5 canvases, 25 trending caption styles
+- ✅ **Open source (MIT).** Nobody can take features away or raise the price.
 
 ## Features
 
@@ -23,6 +40,14 @@ Everything you pay CapCut Pro or Filmora for, with no subscription, no watermark
 | **Audio** | Per-clip volume (0–200%), fades, speed 0.25×–4× with pitch-correct audio, one-click **voice clean-up** (noise reduction), and loudness normalization to −14 LUFS for social media. |
 | **Export** | MP4 (H.264/AAC) with progress and cancel. No watermark, no limits. |
 | **Safe** | Project files (`.clipmaster`), autosave and crash recovery. |
+
+## Screenshots
+
+| Animated captions (25 styles) | Picture-in-picture + keyframes |
+|---|---|
+| <img src="docs/screenshots/captions.png" alt="Caption templates"> | <img src="docs/screenshots/pip-keyframes.png" alt="Picture in picture with keyframes"> |
+| **✨ Auto Edit: music montage** | **Every caption template, as exported** |
+| <img src="docs/screenshots/auto-edit.png" alt="Auto Edit dialog"> | <img src="docs/screenshots/caption-templates.png" alt="All 25 caption templates rendered"> |
 
 ## Install (users)
 
@@ -81,7 +106,9 @@ The preview plays your media directly and approximates effects with CSS. Export 
 
 ## Contributing
 
-Pull requests are welcome. Run `npm test` and `npm run typecheck` before opening one, and add yourself to `AUTHORS`.
+Clipmaster is built in the open, and every contribution helps creators who can't afford expensive subscriptions. Read [CONTRIBUTING.md](CONTRIBUTING.md) to get started. Issues labelled **good first issue** are a great entry point.
+
+If Clipmaster saves you money, **star the repo ⭐** and tell a creator friend. That's how open-source projects grow.
 
 ## License
 

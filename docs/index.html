@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Clipmaster: free, open-source video editor</title>
+  <meta name="description" content="Clipmaster is a free, open-source desktop video editor with animated captions, 43 effects and transitions, Auto Edit and 4K export. No subscription, no watermark, works offline." />
+  <meta property="og:title" content="Clipmaster: the free, open-source video editor for creators" />
+  <meta property="og:description" content="Animated captions, effects, Auto Edit and 4K export. No subscription, no watermark, no cloud." />
+  <meta property="og:image" content="screenshots/editor.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" href="favicon.png" />
+  <style>
+    :root { --bg:#0b0c10; --panel:#15161c; --line:#262833; --text:#eceef4; --muted:#9aa0b2; --accent:#8b5cf6; --accent2:#a78bfa; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    a { color: var(--accent2); }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+    header { display:flex; align-items:center; gap:10px; padding:18px 0; }
+    header b { font-size:18px; }
+    header nav { margin-left:auto; display:flex; gap:18px; font-size:15px; }
+    header nav a { color:var(--muted); text-decoration:none; }
+    .logo { width:30px; height:30px; border-radius:8px; background:var(--accent); display:grid; place-items:center; color:#fff; font-size:13px; }
+    .hero { text-align:center; padding:56px 0 30px; }
+    .hero h1 { font-size:clamp(34px,6vw,60px); line-height:1.08; margin:0 0 16px; letter-spacing:-0.02em; }
+    .hero h1 span { background:linear-gradient(90deg,#a78bfa,#f472b6,#fbbf24); -webkit-background-clip:text; background-clip:text; color:transparent; }
+    .hero p { color:var(--muted); font-size:clamp(17px,2.2vw,20px); max-width:720px; margin:0 auto 28px; }
+    .cta { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+    .btn { display:inline-block; padding:13px 22px; border-radius:10px; font-weight:600; text-decoration:none; border:1px solid var(--line); color:var(--text); }
+    .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .btn.primary:hover { background:var(--accent2); }
+    .small { color:var(--muted); font-size:14px; margin-top:12px; }
+    .shot { margin:38px auto 0; border-radius:14px; overflow:hidden; border:1px solid var(--line); box-shadow:0 30px 80px #000a; }
+    .shot img { display:block; width:100%; height:auto; }
+    section { padding:64px 0 10px; }
+    h2 { font-size:clamp(26px,4vw,36px); margin:0 0 8px; text-align:center; }
+    .sub { color:var(--muted); text-align:center; margin:0 0 34px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:22px; }
+    .card h3 { margin:0 0 6px; font-size:18px; }
+    .card p { margin:0; color:var(--muted); font-size:15px; }
+    .emoji { font-size:26px; }
+    table { width:100%; border-collapse:collapse; background:var(--panel); border-radius:14px; overflow:hidden; font-size:15px; }
+    th, td { padding:13px 16px; border-bottom:1px solid var(--line); text-align:left; }
+    th { color:var(--muted); font-weight:500; }
+    td:nth-child(2) { color:#34d399; font-weight:600; }
+    .table-wrap { overflow-x:auto; }
+    .two { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:18px; }
+    .two img { width:100%; border-radius:12px; border:1px solid var(--line); }
+    footer { color:var(--muted); text-align:center; padding:60px 0 40px; font-size:14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">▶</div><b>Clipmaster</b>
+      <nav><a href="#features">Features</a><a href="#compare">Why free</a><a href="https://github.com/pankya1801/Clipmaster">GitHub</a></nav>
+    </header>
+
+    <div class="hero">
+      <h1>Edit like a pro.<br><span>Pay nothing. Ever.</span></h1>
+      <p>Clipmaster is a free, open-source video editor with animated captions, 43 effects and transitions, one-click Auto Edit and 4K export. No subscription, no watermark, and your videos never leave your computer.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/pankya1801/Clipmaster/releases/latest">⬇ Download for free</a>
+        <a class="btn" href="https://github.com/pankya1801/Clipmaster">⭐ Star on GitHub</a>
+      </div>
+      <div class="small">Windows · macOS (Apple Silicon &amp; Intel) · Linux · MIT licensed</div>
+      <div class="shot"><img src="screenshots/editor.png" alt="Clipmaster editor" /></div>
+    </div>
+
+    <section id="features">
+      <h2>Everything creators actually use</h2>
+      <p class="sub">Built for Reels, Shorts, TikTok and YouTube.</p>
+      <div class="grid">
+        <div class="card"><div class="emoji">💬</div><h3>25 animated caption styles</h3><p>Word-by-word highlight, karaoke, one-word pop, neon and more. Auto-captions run offline with whisper.cpp.</p></div>
+        <div class="card"><div class="emoji">✨</div><h3>One-click Auto Edit</h3><p>Cuts pauses out of talking videos, or cuts your clips to the beat of a song.</p></div>
+        <div class="card"><div class="emoji">🎨</div><h3>43 effects &amp; transitions</h3><p>Cinematic color grades, film grain, glitch, Ken Burns, slides, dissolves, flashes…</p></div>
+        <div class="card"><div class="emoji">🖼</div><h3>Picture-in-picture &amp; keyframes</h3><p>Move, scale, rotate and fade any layer, and animate it with smooth keyframes.</p></div>
+        <div class="card"><div class="emoji">🎙</div><h3>Clean audio</h3><p>One-click noise reduction for voice, and loudness normalized for social platforms.</p></div>
+        <div class="card"><div class="emoji">📐</div><h3>Any format, up to 4K</h3><p>9:16, 16:9, 1:1 and 4:5 canvases. MP4 export with no watermark and no limits.</p></div>
+      </div>
+    </section>
+
+    <section id="compare">
+      <h2>Why is it free?</h2>
+      <p class="sub">Because it's open source. No company can put features behind a paywall later.</p>
+      <div class="table-wrap">
+        <table>
+          <tr><th></th><th>Clipmaster</th><th>Typical subscription editors</th></tr>
+          <tr><td>Price</td><td>Free forever</td><td>Paid plans for many features</td></tr>
+          <tr><td>Watermark</td><td>Never</td><td>Often on free plans</td></tr>
+          <tr><td>Auto captions</td><td>Included, offline</td><td>Often paid, cloud-based</td></tr>
+          <tr><td>Your footage</td><td>Stays on your computer</td><td>Often uploaded to servers</td></tr>
+          <tr><td>Account required</td><td>No</td><td>Usually</td></tr>
+          <tr><td>Source code</td><td>Open (MIT)</td><td>Closed</td></tr>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>See it in action</h2>
+      <p class="sub">&nbsp;</p>
+      <div class="two">
+        <img src="screenshots/caption-templates.png" alt="All 25 caption templates" />
+        <img src="screenshots/pip-keyframes.png" alt="Picture in picture with keyframes" />
+      </div>
+    </section>
+
+    <section style="text-align:center">
+      <h2>Ready to create?</h2>
+      <p class="sub">Download Clipmaster and make your next video, free.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/pankya1801/Clipmaster/releases/latest">⬇ Download for free</a>
+        <a class="btn" href="https://github.com/pankya1801/Clipmaster/blob/main/CONTRIBUTING.md">🤝 Contribute</a>
+      </div>
+    </section>
+
+    <footer>Clipmaster is MIT-licensed open source · © 2026 The Clipmaster Authors<br>FFmpeg and whisper.cpp are the property of their respective authors.</footer>
+  </div>
+</body>
+</html>
