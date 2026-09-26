@@ -1,0 +1,15 @@
+name: ✨ Feature request
+description: Suggest something Clipmaster should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What are you trying to make?
+      description: Describe the video or workflow. Examples from CapCut, Filmora, Premiere and others help.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How should it work?
