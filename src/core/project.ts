@@ -1,3 +1,4 @@
+import { sampleKeyframes, upsertKeyframe } from "./keyframes";
 import type { Clip, MediaAsset, MediaClip, Project, TextClip, Track, TrackKind, Transform } from "./types";
 
 export const DEFAULT_IMAGE_SECONDS = 5;
@@ -265,8 +266,13 @@ export function splitClip(p: Project, id: string, t: number): { project: Project
     return { project: withClip(withClip(p, left), right), clipId: rightId };
   }
   const cut = c.in + (t - c.start) * c.speed;
-  const left: MediaClip = { ...c, out: cut, fadeOut: 0, transOut: undefined };
-  const right: MediaClip = { ...c, id: rightId, start: t, in: cut, fadeIn: 0, transIn: undefined };
+  const local = t - c.start;
+  const kfLeft = c.keyframes?.length ? upsertKeyframe(c.keyframes.filter((k) => k.t < local), local, sampleKeyframes(c.keyframes, local)) : undefined;
+  const kfRight = c.keyframes?.length
+    ? upsertKeyframe(c.keyframes.filter((k) => k.t > local).map((k) => ({ ...k, t: k.t - local })), 0, sampleKeyframes(c.keyframes, local))
+    : undefined;
+  const left: MediaClip = { ...c, out: cut, fadeOut: 0, transOut: undefined, keyframes: kfLeft };
+  const right: MediaClip = { ...c, id: rightId, start: t, in: cut, fadeIn: 0, transIn: undefined, keyframes: kfRight };
   return { project: withClip(withClip(p, left), right), clipId: rightId };
 }
 
@@ -312,4 +318,19 @@ export function textsAt(p: Project, t: number): TextClip[] {
 
 export function clamp(v: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, v));
+}
+
+/** Transform shown at timeline time `t` (keyframes sampled, else static). */
+export function transformAt(c: MediaClip, t: number): Transform | undefined {
+  if (c.keyframes?.length) return sampleKeyframes(c.keyframes, t - c.start);
+  return c.transform;
+}
+
+/**
+ * Patch that sets transform values at timeline time `t`: writes a keyframe
+ * when the clip is animated, otherwise the static transform.
+ */
+export function transformPatch(c: MediaClip, t: number, values: Transform, fps: number): Partial<MediaClip> {
+  if (c.keyframes?.length) return { keyframes: upsertKeyframe(c.keyframes, clamp(t - c.start, 0, clipDuration(c)), values, fps) };
+  return { transform: values };
 }

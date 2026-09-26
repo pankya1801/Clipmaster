@@ -424,9 +424,48 @@ mod tests {
     }
 
     #[test]
+    fn envelope_has_one_value_per_hop_and_sees_clicks() {
+        let Some(p) = fixture("cm_clicks.wav", &["-f", "lavfi", "-i", "aevalsrc='if(lt(mod(t,0.5),0.03),0.8*sin(2*PI*1000*t),0)':d=4"]) else { return };
+        let env = envelope_blocking(&p, 0.0, 4.0).unwrap();
+        let expected = (4.0 * ENVELOPE_RATE as f64 / ENVELOPE_HOP as f64).ceil() as usize;
+        assert!((env.len() as i64 - expected as i64).abs() <= 2, "{} vs {expected}", env.len());
+        let max = env.iter().cloned().fold(0.0, f32::max);
+        let quiet = env.iter().filter(|v| **v < max * 0.05).count();
+        assert!(quiet > env.len() / 2, "clicks should be sparse");
+    }
+
+    #[test]
     fn thumbnail_is_jpeg_data_url() {
         let Some(v) = fixture("cm_thumb.mp4", &["-f", "lavfi", "-i", "testsrc=s=320x240:d=1", "-pix_fmt", "yuv420p"]) else { return };
         let url = tauri::async_runtime::block_on(thumbnail(v, 0.5)).unwrap();
         assert!(url.starts_with("data:image/jpeg;base64,"));
     }
+}
+
+/// Loudness envelope for beat detection: RMS per 512-sample hop of mono
+/// 22.05 kHz audio between `start` and `end` (source seconds).
+#[tauri::command]
+pub async fn audio_envelope(path: String, start: f64, end: f64) -> Result<Vec<f32>, String> {
+    tauri::async_runtime::spawn_blocking(move || envelope_blocking(&path, start, end))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+pub const ENVELOPE_RATE: u32 = 22_050;
+pub const ENVELOPE_HOP: usize = 512;
+
+fn envelope_blocking(path: &str, start: f64, end: f64) -> Result<Vec<f32>, String> {
+    let out = command("ffmpeg")
+        .args(["-v", "error", "-ss", &format!("{start:.3}"), "-to", &format!("{end:.3}"), "-i", path])
+        .args(["-vn", "-ac", "1", "-ar", &ENVELOPE_RATE.to_string(), "-f", "f32le", "-"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(format!("Could not read audio: {}", String::from_utf8_lossy(&out.stderr).trim()));
+    }
+    let samples: Vec<f32> = out.stdout.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
+    Ok(samples
+        .chunks(ENVELOPE_HOP)
+        .map(|c| (c.iter().map(|v| v * v).sum::<f32>() / c.len() as f32).sqrt())
+        .collect())
 }

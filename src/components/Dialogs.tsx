@@ -3,7 +3,7 @@ import { DEFAULT_AUTO_EDIT } from "../core/autoedit";
 import { EFFECTS } from "../core/effects";
 import { buildExportPlan, ExportQuality } from "../core/ffmpeg";
 import { projectDuration } from "../core/project";
-import { errorText, loadWhisperConfig, runAutoEdit, saveWhisperConfig, WhisperModel } from "../lib/actions";
+import { errorText, loadWhisperConfig, runAutoEdit, runBeatSync, saveWhisperConfig, WhisperModel } from "../lib/actions";
 import { invoke, isTauri, saveDialog } from "../lib/backend";
 import { useEditor } from "../store";
 
@@ -30,6 +30,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
   const project = useEditor((s) => s.project);
   const [quality, setQuality] = useState<ExportQuality>("standard");
   const [res, setRes] = useState(0);
+  const [loudness, setLoudness] = useState(true);
   const [progress, setProgress] = useState<number | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const total = projectDuration(project);
@@ -60,7 +61,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
       setProgress(0);
       const [tempDir, fontsDir] = await Promise.all([invoke<string>("temp_dir"), invoke<string | null>("fonts_dir")]);
       const fontFile = fontsDir ? `${fontsDir}/Montserrat-ExtraBold.ttf` : undefined;
-      const plan = buildExportPlan(project, { outputPath: out, tempDir, quality, fontsDir: fontsDir ?? undefined, fontFile, ...size });
+      const plan = buildExportPlan(project, { outputPath: out, tempDir, quality, fontsDir: fontsDir ?? undefined, fontFile, normalizeLoudness: loudness, ...size });
       await invoke("export_video", { args: plan.args, files: plan.files });
       setProgress(1);
       setStatus(`Saved to ${out}`);
@@ -90,6 +91,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
           </select>
         </label>
       </div>
+      <label className="check"><input type="checkbox" checked={loudness} onChange={(e) => setLoudness(e.target.checked)} disabled={running} /> Normalise loudness for social media (−14 LUFS)</label>
       <p className="muted small">MP4 (H.264 + AAC) · {size.width}×{size.height} · {project.settings.fps} fps · {total.toFixed(1)}s · no watermark</p>
       {progress != null && <div className="progress"><div style={{ width: `${Math.round(progress * 100)}%` }} /></div>}
       {status && <p className="small" style={{ userSelect: "text", whiteSpace: "pre-wrap" }}>{status}</p>}
@@ -109,6 +111,8 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
 }
 
 export function AutoEditDialog({ onClose }: { onClose: () => void }) {
+  const [mode, setMode] = useState<"talk" | "music">("talk");
+  const [beat, setBeat] = useState({ everyBeats: 2, muteClips: true, punchIn: true, flash: false });
   const [opts, setOpts] = useState({ ...DEFAULT_AUTO_EDIT, captions: true, noiseDb: -35, minSilence: 0.45 });
   const [busy, setBusy] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
@@ -117,6 +121,24 @@ export function AutoEditDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title="✨ Auto Edit" onClose={() => !busy && onClose()}>
+      <div className="tabs" style={{ margin: "-4px 0 0" }}>
+        <button className={mode === "talk" ? "active" : ""} onClick={() => setMode("talk")}>🎙 Talking video</button>
+        <button className={mode === "music" ? "active" : ""} onClick={() => setMode("music")}>🎵 Music montage</button>
+      </div>
+      {mode === "music" ? (
+        <>
+          <p className="muted small">Put your clips/photos on the video track and a song on an audio track. Clipmaster finds the beat and cuts your footage to it. One undo step (Ctrl+Z).</p>
+          <label className="field"><span>Cut every</span>
+            <select value={beat.everyBeats} onChange={(e) => setBeat({ ...beat, everyBeats: +e.target.value })}>
+              <option value={1}>1 beat (fast, energetic)</option>
+              <option value={2}>2 beats</option>
+              <option value={4}>4 beats / one bar (calm)</option>
+            </select></label>
+          <label className="check"><input type="checkbox" checked={beat.muteClips} onChange={(e) => setBeat({ ...beat, muteClips: e.target.checked })} /> Mute the clips' own sound (music only)</label>
+          <label className="check"><input type="checkbox" checked={beat.punchIn} onChange={(e) => setBeat({ ...beat, punchIn: e.target.checked })} /> Punch-in zoom on every other shot</label>
+          <label className="check"><input type="checkbox" checked={beat.flash} onChange={(e) => setBeat({ ...beat, flash: e.target.checked })} /> Flash on each cut</label>
+        </>
+      ) : (<>
       <p className="muted small">Turns raw talking footage into a tight edit: cuts out pauses, hides jump cuts with punch-in zooms, adds captions and a colour look. Everything is one undo step (Ctrl+Z).</p>
       <label className="check"><input type="checkbox" checked={opts.removeSilence} onChange={(e) => set({ removeSilence: e.target.checked })} /> Remove silences and pauses</label>
       {opts.removeSilence && (
@@ -143,6 +165,7 @@ export function AutoEditDialog({ onClose }: { onClose: () => void }) {
             {colorLooks.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
           </select></label>
       </div>
+      </>)}
       {result && <p className="small">{result}</p>}
       <div className="row">
         <span className="grow" />
@@ -153,7 +176,7 @@ export function AutoEditDialog({ onClose }: { onClose: () => void }) {
           onClick={async () => {
             setResult(null);
             try {
-              setResult(await runAutoEdit(opts, setBusy));
+              setResult(mode === "music" ? await runBeatSync(beat, setBusy) : await runAutoEdit(opts, setBusy));
             } catch (e) {
               setResult(errorText(e));
             } finally {

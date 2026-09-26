@@ -45,6 +45,15 @@ export interface MediaClip extends ClipBase {
   transOut?: AppliedTransition;
   /** Position/scale/rotation/opacity. Undefined = fill the frame. */
   transform?: Transform;
+  /** Animated transform. When present (≥1 key) it overrides `transform`. */
+  keyframes?: Keyframe[];
+  /** Voice clean-up on this clip's audio. */
+  denoise?: boolean;
+}
+
+export interface Keyframe extends Transform {
+  /** Clip-local time, seconds (0 = clip start on the timeline). */
+  t: number;
 }
 
 export interface Transform {

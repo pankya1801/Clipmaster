@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { captionTemplate, groupCaptionLines } from "../core/captions";
 import { effectsCss, transitionPreview } from "../core/effects";
 import { fittedSize } from "../core/ffmpeg";
-import { clipDuration, clipEnd, clipsOnTrack, IDENTITY_TRANSFORM, projectDuration, textsAt, updateClip } from "../core/project";
+import { clipDuration, clipEnd, clipsOnTrack, IDENTITY_TRANSFORM, projectDuration, textsAt, transformAt, transformPatch, updateClip } from "../core/project";
 import type { MediaClip, Project } from "../core/types";
 import { mediaUrl } from "../lib/backend";
 import { captionCss } from "../lib/captionStyle";
@@ -162,18 +162,17 @@ export function Preview() {
     if (!d) return;
     const c = d.base.clips[d.id];
     if (c.type !== "media") return;
-    const t = c.transform ?? IDENTITY_TRANSFORM;
+    const now = useEditor.getState().playhead;
+    const t = transformAt(c, now) ?? IDENTITY_TRANSFORM;
     const snap = (v: number) => (Math.abs(v - 0.5) < 0.015 ? 0.5 : v);
-    useEditor.getState().replace(
-      updateClip(d.base, d.id, {
-        transform: { ...t, x: snap(t.x + (e.clientX - d.x0) / box.w), y: snap(t.y + (e.clientY - d.y0) / box.h) },
-      })
-    );
+    const values = { ...t, x: snap(t.x + (e.clientX - d.x0) / box.w), y: snap(t.y + (e.clientY - d.y0) / box.h) };
+    useEditor.getState().replace(updateClip(d.base, d.id, transformPatch(c, now, values, d.base.settings.fps)));
   };
   const onFrameWheel = (e: React.WheelEvent) => {
     if (!target) return;
-    const t = target.transform ?? IDENTITY_TRANSFORM;
-    useEditor.getState().commit((p) => updateClip(p, target.id, { transform: { ...t, scale: t.scale * (e.deltaY < 0 ? 1.05 : 0.95) } }));
+    const t = transformAt(target, playhead) ?? IDENTITY_TRANSFORM;
+    const values = { ...t, scale: t.scale * (e.deltaY < 0 ? 1.05 : 0.95) };
+    useEditor.getState().commit((p) => updateClip(p, target.id, transformPatch(target, playhead, values, p.settings.fps)));
   };
   const texts = textsAt(project, playhead);
   const captionLines = useMemo(() => {
@@ -198,7 +197,7 @@ export function Preview() {
             if (!asset) return null;
             const fx = effectsCss(c.effects ?? []);
             const tr = transitionPreview(c.transIn, c.transOut, playhead - c.start, clipDuration(c));
-            const tf = c.transform;
+            const tf = transformAt(c, playhead);
             const place = tf ? `scale(${tf.scale}) rotate(${tf.rotation}deg)` : "";
             const style = {
               filter: [fx.filter, tr.filter].filter(Boolean).join(" ") || undefined,

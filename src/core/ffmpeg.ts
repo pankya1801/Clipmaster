@@ -1,7 +1,8 @@
 import { clipDuration, clipEnd, clipsOnTrack, projectDuration } from "./project";
 import { buildAss } from "./captions";
 import { effectById, slideOverlay, transitionFilters } from "./effects";
-import type { MediaClip, Project, TextClip } from "./types";
+import { isAnimated, keyframeExpr } from "./keyframes";
+import type { Keyframe, MediaClip, Project, TextClip } from "./types";
 
 export type ExportQuality = "draft" | "standard" | "high";
 
@@ -14,6 +15,8 @@ export interface ExportOptions {
   fontFile?: string;
   /** Directory of bundled fonts for captions. */
   fontsDir?: string;
+  /** Normalise loudness to -14 LUFS (YouTube / TikTok / Instagram target). */
+  normalizeLoudness?: boolean;
   /** Override output size (defaults to project settings). */
   width?: number;
   height?: number;
@@ -31,6 +34,13 @@ const QUALITY: Record<ExportQuality, { preset: string; crf: number }> = {
   standard: { preset: "medium", crf: 21 },
   high: { preset: "slow", crf: 17 },
 };
+
+/**
+ * Voice clean-up: rumble cut, FFT noise reduction and non-local-means
+ * denoise. Measured on white noise at -35/-50 dBFS: hiss drops by 35-40 dB
+ * while speech-band level is kept (see tests/features.test.ts).
+ */
+export const VOICE_CLEANUP = ["highpass=f=80", "afftdn=nr=20:nf=-40", "anlmdn=s=7"];
 
 const n = (v: number) => Number(v.toFixed(4)).toString();
 
@@ -104,7 +114,8 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
       }
       const shown = dur + tail;
       const idx = addInput(asset.path, isImage, shown);
-      const tf = c.transform;
+      const keys = c.keyframes?.length ? c.keyframes : undefined;
+      const tf = keys ? keys[0] : c.transform;
       // With a transform the clip keeps its own aspect (no letterbox pad), so
       // effects see the fitted frame size instead of the canvas size.
       const fit = fittedSize(asset.width, asset.height, W, H);
@@ -119,13 +130,14 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
         ...(c.effects ?? []).map((e) => effectById(e.id)?.filter(e.amount, ctx)).filter((x): x is string => !!x),
         "format=yuva420p",
         ...transitionFilters(c.transIn, c.transOut, dur, ctx),
-        ...(tf ? transformFilters(tf) : []),
+        ...(keys ? keyframeFilters(keys, fit) : tf ? transformFilters(tf) : []),
         `setpts=PTS+${n(c.start)}/TB`,
       ].filter(Boolean);
       filters.push(`[${idx}:v]${chain.join(",")}[v${vi}]`);
       const pos = slideOverlay(c.transIn, c.start);
-      const cx = n(tf?.x ?? 0.5);
-      const cy = n(tf?.y ?? 0.5);
+      const tv = `(t-${n(c.start)})`;
+      const cx = keys ? keyframeExpr(keys, "x", tv) : n(tf?.x ?? 0.5);
+      const cy = keys ? keyframeExpr(keys, "y", tv) : n(tf?.y ?? 0.5);
       filters.push(
         `[${last}][v${vi}]overlay=x='W*${cx}-w/2+(${pos.x})':y='H*${cy}-h/2+(${pos.y})':eof_action=pass:enable='between(t,${n(c.start)},${n(c.start + shown)})'[o${vi}]`
       );
@@ -186,6 +198,7 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
       `atrim=start=${n(c.in)}:end=${n(c.out)}`,
       "asetpts=PTS-STARTPTS",
       ...atempoChain(c.speed),
+      ...(c.denoise ? VOICE_CLEANUP : []),
       `volume=${n(c.volume)}`,
       c.fadeIn > 0 ? `afade=t=in:st=0:d=${n(c.fadeIn)}` : "",
       c.fadeOut > 0 ? `afade=t=out:st=${n(Math.max(0, dur - c.fadeOut))}:d=${n(c.fadeOut)}` : "",
@@ -197,7 +210,8 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
   });
   if (audioClips.length) {
     const labels = audioClips.map((_, i) => `[a${i}]`).join("");
-    filters.push(`${labels}amix=inputs=${audioClips.length}:duration=longest:normalize=0,apad[aout]`);
+    const loud = opts.normalizeLoudness ? ",loudnorm=I=-14:TP=-1.5:LRA=11" : "";
+    filters.push(`${labels}amix=inputs=${audioClips.length}:duration=longest:normalize=0${loud},aresample=48000,apad[aout]`);
   } else {
     filters.push(`anullsrc=r=48000:cl=stereo[aout]`);
   }
@@ -250,6 +264,33 @@ export function transformFilters(t: { scale: number; rotation: number; opacity: 
     out.push(`rotate=${a}:c=none:ow='rotw(${a})':oh='roth(${a})'`);
   }
   if (t.opacity < 1) out.push(`colorchannelmixer=aa=${n(t.opacity)}`);
+  return out;
+}
+
+/**
+ * Animated scale / rotation / opacity (clip-local time `t`). The frame is
+ * padded to a constant size so downstream filters never see size changes.
+ */
+export function keyframeFilters(keys: Keyframe[], fit: { w: number; h: number }): string[] {
+  const out: string[] = [];
+  const maxS = Math.max(...keys.map((k) => k.scale));
+  if (isAnimated(keys, "scale")) {
+    const s = keyframeExpr(keys, "scale", "t");
+    const bw = Math.max(2, Math.round((fit.w * maxS) / 2) * 2);
+    const bh = Math.max(2, Math.round((fit.h * maxS) / 2) * 2);
+    out.push(`scale=w='max(2\\,trunc(${fit.w}*(${s})/2)*2)':h='max(2\\,trunc(${fit.h}*(${s})/2)*2)':eval=frame`);
+    out.push(`pad=w=${bw}:h=${bh}:x='(ow-iw)/2':y='(oh-ih)/2':color=black@0:eval=frame`);
+  } else if (keys[0].scale !== 1) {
+    out.push(`scale='trunc(iw*${n(keys[0].scale)}/2)*2':'trunc(ih*${n(keys[0].scale)}/2)*2'`);
+  }
+  if (keys.some((k) => k.rotation)) {
+    out.push(`rotate='(${keyframeExpr(keys, "rotation", "t")})*PI/180':c=none:ow='hypot(iw\\,ih)':oh=ow`);
+  }
+  if (isAnimated(keys, "opacity")) {
+    out.push(`geq=lum='lum(X\\,Y)':cb='cb(X\\,Y)':cr='cr(X\\,Y)':a='alpha(X\\,Y)*(${keyframeExpr(keys, "opacity", "T")})'`);
+  } else if (keys[0].opacity < 1) {
+    out.push(`colorchannelmixer=aa=${n(keys[0].opacity)}`);
+  }
   return out;
 }
 

@@ -119,3 +119,22 @@ describe("transform", () => {
     expect(media(back, v).transform).toBeUndefined();
   });
 });
+
+describe("keyframes on split", () => {
+  it("keeps the animation continuous across the cut", () => {
+    const { p, v } = setup();
+    const withKeys = updateClip(p, v, {
+      keyframes: [
+        { t: 0, x: 0, y: 0.5, scale: 1, rotation: 0, opacity: 1 },
+        { t: 10, x: 1, y: 0.5, scale: 1, rotation: 0, opacity: 1 },
+      ],
+    });
+    const { project, clipId } = splitClip(withKeys, v, 5);
+    const left = media(project, v).keyframes!;
+    const right = media(project, clipId!).keyframes!;
+    expect(left.at(-1)!.t).toBeCloseTo(5);
+    expect(right[0].t).toBe(0);
+    expect(right[0].x).toBeCloseTo(left.at(-1)!.x);
+    expect(right.at(-1)!.t).toBeCloseTo(5);
+  });
+});

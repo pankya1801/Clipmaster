@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { applyAutoEdit, keptRanges, parseSilenceDetect, DEFAULT_AUTO_EDIT } from "../src/core/autoedit";
 import { assColor, buildAss, CAPTION_TEMPLATES, groupCaptionLines, parseSrt, toSrt } from "../src/core/captions";
 import { EFFECTS, TRANSITIONS } from "../src/core/effects";
-import { buildExportPlan } from "../src/core/ffmpeg";
+import { buildExportPlan, VOICE_CLEANUP } from "../src/core/ffmpeg";
 import { addAsset, addTrack, clipsOnTrack, createProject, placeAsset, updateClip } from "../src/core/project";
 import type { CaptionWord, MediaClip } from "../src/core/types";
 
@@ -128,6 +128,56 @@ describe.skipIf(!hasFfmpeg)("real ffmpeg: every effect, transition and caption t
     expect(plan.args.join(" ")).toContain("rotate=");
     execFileSync("ffmpeg", plan.args, { stdio: "pipe" });
     expect(existsSync(pipOut)).toBe(true);
+  });
+
+  it("voice clean-up and loudness normalisation render", () => {
+    const out = join(dir, "voice.mp4");
+    let p = createProject();
+    p = { ...p, settings: { width: 320, height: 240, fps: 24 } };
+    p = addAsset(p, { id: "v", path: src, name: "v", kind: "video", duration: 3, hasAudio: true });
+    const a = placeAsset(p, "v", "t_v1");
+    p = updateClip(a.project, a.clipId!, { denoise: true });
+    const plan = buildExportPlan(p, { outputPath: out, tempDir: dir, quality: "draft", normalizeLoudness: true });
+    expect(plan.args.join(" ")).toContain("afftdn");
+    expect(plan.args.join(" ")).toContain("loudnorm");
+    execFileSync("ffmpeg", plan.args, { stdio: "pipe" });
+    expect(existsSync(out)).toBe(true);
+  });
+
+  it("voice clean-up removes hiss but keeps the voice", () => {
+    const noisy = join(dir, "noisy.wav");
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "anoisesrc=a=0.03:d=4", "-f", "lavfi", "-i", "sine=f=220:d=4,volume=0.3,afade=t=in:st=2:d=0.01",
+      "-filter_complex", "[0][1]amix=inputs=2:normalize=0", noisy]);
+    const level = (chain: string, from: number, to: number) => {
+      const r = spawnSync("ffmpeg", ["-i", noisy, "-af", `${chain},atrim=${from}:${to},volumedetect`, "-f", "null", "-"]);
+      return Number(/mean_volume: (-?[\d.]+)/.exec(r.stderr.toString())![1]);
+    };
+    const chain = VOICE_CLEANUP.join(",");
+    expect(level(chain, 0.5, 1.8)).toBeLessThan(level("anull", 0.5, 1.8) - 20); // hiss
+    expect(level(chain, 2.5, 3.8)).toBeGreaterThan(level("anull", 2.5, 3.8) - 3); // voice
+  });
+
+  it("keyframes: animated position, scale, rotation and opacity", () => {
+    const out = join(dir, "kf.mp4");
+    let p = createProject();
+    p = { ...p, settings: { width: 320, height: 240, fps: 24 } };
+    p = addAsset(p, { id: "v", path: src, name: "v", kind: "video", duration: 3, hasAudio: true, width: 320, height: 240 });
+    const a = placeAsset(p, "v", "t_v1");
+    p = updateClip(a.project, a.clipId!, {
+      keyframes: [
+        { t: 0, x: 0.2, y: 0.2, scale: 0.3, rotation: 0, opacity: 0.2 },
+        { t: 1.5, x: 0.5, y: 0.5, scale: 1, rotation: 90, opacity: 1 },
+        { t: 3, x: 0.8, y: 0.7, scale: 0.5, rotation: 180, opacity: 0.6 },
+      ],
+      effects: [{ id: "vignette", amount: 0.5 }],
+    });
+    const plan = buildExportPlan(p, { outputPath: out, tempDir: dir, quality: "draft", fontsDir });
+    try {
+      execFileSync("ffmpeg", plan.args, { stdio: "pipe" });
+    } catch (e: any) {
+      throw new Error(e.stderr?.toString().split("\n").slice(-8).join("\n"));
+    }
+    expect(existsSync(out)).toBe(true);
   });
 
   it.each(CAPTION_TEMPLATES.map((t) => t.id))("caption template %s", (id) => {
