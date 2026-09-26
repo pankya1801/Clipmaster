@@ -144,16 +144,27 @@ function downloadText(name: string, text: string) {
 // ---------- captions ----------
 
 export interface WhisperConfig {
+  /** Custom whisper-cli path; empty = bundled. */
   bin: string;
+  /** Custom model file; empty = a downloaded model. */
   model: string;
+  /** Preferred downloaded model name (e.g. "base.en"). */
+  modelName: string;
   language: string;
+}
+
+export interface WhisperModel {
+  name: string;
+  label: string;
+  size_mb: number;
+  path: string | null;
 }
 
 export function loadWhisperConfig(): WhisperConfig {
   try {
-    return { bin: "", model: "", language: "auto", ...JSON.parse(localStorage.getItem("cm.whisper") ?? "{}") };
+    return { bin: "", model: "", modelName: "base.en", language: "auto", ...JSON.parse(localStorage.getItem("cm.whisper") ?? "{}") };
   } catch {
-    return { bin: "", model: "", language: "auto" };
+    return { bin: "", model: "", modelName: "base.en", language: "auto" };
   }
 }
 export function saveWhisperConfig(c: WhisperConfig) {
@@ -168,7 +179,15 @@ export function saveWhisperConfig(c: WhisperConfig) {
 export async function autoCaptions(onProgress?: (msg: string) => void): Promise<number> {
   const cfg = loadWhisperConfig();
   if (!isTauri) throw new Error("Auto captions need the desktop app.");
-  if (!cfg.bin || !cfg.model) throw new Error("Set the whisper.cpp program and model in Settings first.");
+  let model = cfg.model;
+  if (!model) {
+    const models = await invoke<WhisperModel[]>("whisper_models");
+    const ready = models.filter((m) => m.path);
+    model = (ready.find((m) => m.name === cfg.modelName) ?? ready[0])?.path ?? "";
+  }
+  if (!model) throw new Error("Download a caption model first: Settings → Auto captions.");
+  // English-only models can't auto-detect language.
+  const language = model.includes(".en.") && cfg.language === "auto" ? "en" : cfg.language;
   const { project } = S();
   const trackId = mainTrackId(project);
   if (!trackId) throw new Error("No clip with audio on the timeline.");
@@ -180,7 +199,7 @@ export async function autoCaptions(onProgress?: (msg: string) => void): Promise<
     if (!asset?.hasAudio) continue;
     onProgress?.(`Transcribing clip ${i + 1} of ${clips.length}…`);
     const srt = await invoke<string>("transcribe", {
-      path: asset.path, start: c.in, end: c.out, whisperBin: cfg.bin, model: cfg.model, language: cfg.language,
+      path: asset.path, start: c.in, end: c.out, whisperBin: cfg.bin, model, language,
     });
     for (const w of parseSrt(srt)) words.push({ text: w.text, start: c.start + w.start / c.speed, end: c.start + w.end / c.speed });
   }
