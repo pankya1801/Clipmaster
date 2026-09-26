@@ -24,9 +24,11 @@ jobs:
             target: x86_64-pc-windows-msvc
           - platform: macos-latest
             target: aarch64-apple-darwin
-          - platform: macos-13
+          # Intel Macs: cross-compiled on the Apple Silicon runner (GitHub retired
+          # the macos-13 Intel runners, so jobs requesting them never start).
+          - platform: macos-latest
             target: x86_64-apple-darwin
-            whisper_cmake: -DGGML_METAL=OFF
+            whisper_cmake: -DGGML_METAL=OFF -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_SYSTEM_PROCESSOR=x86_64
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
