@@ -1,4 +1,5 @@
 import { applyAutoEdit, AutoEditOptions, mainTrackId, parseSilenceDetect, Range } from "../core/autoedit";
+import { beatSyncMontage, detectBeats, findMusicClip, MontageOptions } from "../core/beats";
 import { parseSrt, toSrt } from "../core/captions";
 import {
   addAsset, addText, clipEnd, clipsOnTrack, createProject, deleteClips, duplicateClip, placeAsset, splitClip, trackAccepts, addTrack, uid,
@@ -279,4 +280,22 @@ export async function runAutoEdit(
 
 export function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+// ---------- beat sync ----------
+
+export async function runBeatSync(opts: MontageOptions, onProgress: (msg: string) => void): Promise<string> {
+  if (!isTauri) throw new Error("Beat detection needs the desktop app.");
+  const { project } = S();
+  const music = findMusicClip(project);
+  if (!music) throw new Error("Add a music track on an audio track first.");
+  const asset = project.assets[music.assetId];
+  onProgress("Listening for the beat…");
+  const env = await invoke<number[]>("audio_envelope", { path: asset.path, start: music.in, end: music.out });
+  const { bpm, beats } = detectBeats(env);
+  if (!beats.length) throw new Error("Couldn't find a beat in that track.");
+  const r = beatSyncMontage(project, music.id, beats.map((b) => b + music.in), opts);
+  if (!r.cuts) throw new Error("Add some video clips or photos to the video track first.");
+  S().commit(() => r.project);
+  return `Detected ${bpm} BPM · made ${r.cuts + 1} shots cut on the beat.`;
 }

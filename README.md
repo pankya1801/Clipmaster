@@ -16,10 +16,11 @@ Everything you pay CapCut Pro or Filmora for, with no subscription, no watermark
 | **25 caption templates** | Word-by-word highlight, karaoke, one-word pop, neon, boxed, typewriter and more. Captions are rendered with real outlines and animations. |
 | **Auto captions** | Runs [whisper.cpp](https://github.com/ggml-org/whisper.cpp) locally, so your audio never leaves your computer. One-click model download; you can also import or export SRT files. |
 | **Picture-in-picture** | Position, scale, rotation and opacity for any clip. Drag it in the preview, or use the corner presets. |
+| **Keyframe animation** | Animate position, scale, rotation and opacity with smooth easing. What you see in the preview is exactly what exports. |
 | **32 effects** | Color grading (cinematic teal & orange, vintage, noir, warm/cool…), stylize (vignette, film grain, glitch, RGB split, pixelate…) and motion (Ken Burns, slow zoom, punch-in, camera shake). |
 | **11 transitions** | Cross dissolve, fade, flash, four slides, zoom pop, blur in, fade out, dip to white. |
-| **✨ Auto Edit** | One click removes silences and pauses, hides jump cuts with punch-in zooms, adds captions and applies a color look. |
-| **Audio** | Per-clip volume (0–200%), fade in and out, speed 0.25×–4× with pitch-correct audio, and track mute. |
+| **✨ Auto Edit** | *Talking video:* removes silences, hides jump cuts with punch-in zooms, adds captions and applies a look. *Music montage:* detects the song's beat and cuts your clips and photos to it. |
+| **Audio** | Per-clip volume (0–200%), fades, speed 0.25×–4× with pitch-correct audio, one-click **voice clean-up** (noise reduction), and loudness normalization to −14 LUFS for social media. |
 | **Export** | MP4 (H.264/AAC) with progress and cancel. No watermark, no limits. |
 | **Safe** | Project files (`.clipmaster`), autosave and crash recovery. |
 
@@ -62,6 +63,8 @@ src/core/        Pure TypeScript, fully unit-tested
   effects.ts     Effect and transition catalogue (FFmpeg filters + CSS preview)
   captions.ts    Caption templates → ASS subtitles (libass), SRT import/export
   autoedit.ts    Silence detection and jump-cut logic
+  beats.ts       Beat detection and beat-synced montage
+  keyframes.ts   Keyframe interpolation (shared by preview and export)
 src/components/  React UI (preview, timeline, panels, dialogs)
 src-tauri/       Rust backend: ffprobe, thumbnails, export runner, whisper
 src-tauri/fonts  Caption fonts (SIL Open Font License)
@@ -71,10 +74,10 @@ The preview plays your media directly and approximates effects with CSS. Export 
 
 ## Roadmap
 
-- Keyframe animation for position, scale and opacity
 - Stickers, overlays and LUT import
-- Beat-synced auto edit for music videos
-- Background removal and noise reduction
+- Background removal
+- Speed ramps and freeze frames
+- Templates you can share
 
 ## Contributing
 
