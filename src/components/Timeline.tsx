@@ -191,6 +191,8 @@ export function Timeline() {
                       {c.type === "media" && c.transIn && <div className="trans" style={{ left: 0, width: c.transIn.duration * zoom }} />}
                       {c.type === "media" && c.transOut && <div className="trans out" style={{ right: 0, width: c.transOut.duration * zoom }} />}
                       {fxCount > 0 && <span className="fx-dot">fx {fxCount}</span>}
+                      {c.type === "media" &&
+                        c.keyframes?.map((k) => <span key={k.t} className="kf-dot" style={{ left: k.t * zoom - 4 }} />)}
                       <div className="handle l" onPointerDown={(e) => startClipDrag(e, c.id, "trim-l")} />
                       <div className="clip-label">
                         {c.type === "text" ? `T ${c.text}` : `${asset?.name ?? "missing"}${c.type === "media" && c.speed !== 1 ? ` · ${c.speed}×` : ""}`}

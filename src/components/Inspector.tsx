@@ -1,5 +1,6 @@
 import { effectById, transitionById, TRANSITIONS } from "../core/effects";
-import { clipDuration, IDENTITY_TRANSFORM, PIP_PRESETS, updateClip } from "../core/project";
+import { clipDuration, IDENTITY_TRANSFORM, PIP_PRESETS, transformAt, transformPatch, updateClip } from "../core/project";
+import { upsertKeyframe } from "../core/keyframes";
 import { ASPECT_PRESETS, MediaClip, TextClip } from "../core/types";
 import { useEditor } from "../store";
 import { formatTime } from "./Preview";
@@ -160,24 +161,58 @@ function ProjectInspector() {
 }
 
 function TransformControls({ clip, set }: { clip: MediaClip; set: (p: Partial<MediaClip>) => void }) {
-  const t = clip.transform ?? IDENTITY_TRANSFORM;
-  const put = (patch: Partial<typeof t>) => set({ transform: { ...t, ...patch } });
+  const playhead = useEditor((s) => s.playhead);
+  const fps = useEditor((s) => s.project.settings.fps);
+  const setPlayhead = useEditor((s) => s.setPlayhead);
+  const t = transformAt(clip, playhead) ?? IDENTITY_TRANSFORM;
+  const local = Math.min(clipDuration(clip), Math.max(0, playhead - clip.start));
+  const keys = clip.keyframes ?? [];
+  const onKey = keys.some((k) => Math.abs(k.t - local) < 0.5 / fps);
+  const put = (patch: Partial<typeof t>) => set(transformPatch(clip, playhead, { ...t, ...patch }, fps));
   return (
     <div className="fx-item">
       <div className="row" style={{ flexWrap: "wrap", gap: 4 }}>
         {PIP_PRESETS.map((p) => (
-          <button key={p.label} className="small" onClick={() => set({ transform: p.t })} title={`Picture-in-picture: ${p.label}`}>
+          <button key={p.label} className="small" onClick={() => set(transformPatch(clip, playhead, p.t, fps))} title={`Picture-in-picture: ${p.label}`}>
             {p.label}
           </button>
         ))}
-        <button className="small" onClick={() => set({ transform: undefined })} disabled={!clip.transform}>Reset</button>
+        <button className="small" onClick={() => set({ transform: undefined, keyframes: undefined })} disabled={!clip.transform && !keys.length}>Reset</button>
       </div>
       <Num label="Scale" value={t.scale * 100} min={5} max={300} step={1} suffix="%" onChange={(v) => put({ scale: v / 100 })} />
       <Num label="Position X" value={t.x * 100} min={-50} max={150} step={1} suffix="%" onChange={(v) => put({ x: v / 100 })} />
       <Num label="Position Y" value={t.y * 100} min={-50} max={150} step={1} suffix="%" onChange={(v) => put({ y: v / 100 })} />
       <Num label="Rotation" value={t.rotation} min={0} max={359} step={1} suffix="°" onChange={(rotation) => put({ rotation })} />
       <Num label="Opacity" value={t.opacity * 100} min={0} max={100} step={1} suffix="%" onChange={(v) => put({ opacity: v / 100 })} />
-      <p className="small muted" style={{ margin: 0 }}>Tip: drag the clip in the preview to move it, scroll to resize.</p>
+      <div className="section-title">Keyframes {keys.length ? `(${keys.length})` : ""}</div>
+      <div className="row">
+        <button
+          className={onKey ? "" : "primary"}
+          disabled={onKey}
+          onClick={() => {
+            // First keyframe also anchors the current look at the clip start.
+            const seed = keys.length ? keys : upsertKeyframe([], 0, clip.transform ?? IDENTITY_TRANSFORM, fps);
+            set({ keyframes: upsertKeyframe(seed, local, t, fps) });
+          }}
+          title="Add a keyframe at the playhead, then move the playhead and change values to animate"
+        >
+          ◆ {onKey ? "Keyframe here" : "Add keyframe"}
+        </button>
+        {keys.length > 0 && <button onClick={() => set({ keyframes: undefined, transform: t })}>Remove all</button>}
+      </div>
+      {keys.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+          {keys.map((k) => (
+            <span key={k.t} className="kbd" style={{ cursor: "pointer" }} onClick={() => setPlayhead(clip.start + k.t)} title="Jump to keyframe">
+              ◆ {k.t.toFixed(2)}s
+              <b style={{ marginLeft: 4 }} onClick={(e) => { e.stopPropagation(); const rest = keys.filter((x) => x !== k); set(rest.length ? { keyframes: rest } : { keyframes: undefined, transform: k }); }}>×</b>
+            </span>
+          ))}
+        </div>
+      )}
+      <p className="small muted" style={{ margin: 0 }}>
+        {keys.length ? "Changing a value writes a keyframe at the playhead." : "Tip: drag the clip in the preview to move it, scroll to resize. Add keyframes to animate."}
+      </p>
     </div>
   );
 }

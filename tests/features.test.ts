@@ -130,6 +130,29 @@ describe.skipIf(!hasFfmpeg)("real ffmpeg: every effect, transition and caption t
     expect(existsSync(pipOut)).toBe(true);
   });
 
+  it("keyframes: animated position, scale, rotation and opacity", () => {
+    const out = join(dir, "kf.mp4");
+    let p = createProject();
+    p = { ...p, settings: { width: 320, height: 240, fps: 24 } };
+    p = addAsset(p, { id: "v", path: src, name: "v", kind: "video", duration: 3, hasAudio: true, width: 320, height: 240 });
+    const a = placeAsset(p, "v", "t_v1");
+    p = updateClip(a.project, a.clipId!, {
+      keyframes: [
+        { t: 0, x: 0.2, y: 0.2, scale: 0.3, rotation: 0, opacity: 0.2 },
+        { t: 1.5, x: 0.5, y: 0.5, scale: 1, rotation: 90, opacity: 1 },
+        { t: 3, x: 0.8, y: 0.7, scale: 0.5, rotation: 180, opacity: 0.6 },
+      ],
+      effects: [{ id: "vignette", amount: 0.5 }],
+    });
+    const plan = buildExportPlan(p, { outputPath: out, tempDir: dir, quality: "draft", fontsDir });
+    try {
+      execFileSync("ffmpeg", plan.args, { stdio: "pipe" });
+    } catch (e: any) {
+      throw new Error(e.stderr?.toString().split("\n").slice(-8).join("\n"));
+    }
+    expect(existsSync(out)).toBe(true);
+  });
+
   it.each(CAPTION_TEMPLATES.map((t) => t.id))("caption template %s", (id) => {
     render((_c, p) => ({ ...p, captions: words, captionSettings: { templateId: id, scale: 1 } }), `cap-${id}`);
   });

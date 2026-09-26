@@ -152,3 +152,4 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; }
 .banner { background: #7c2d12; color: #ffedd5; padding: 6px 12px; font-size: 12px; }
 .fx-item { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; display: grid; gap: 4px; }
 .kbd { font-family: ui-monospace, monospace; font-size: 11px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.clip .kf-dot { position: absolute; top: 50%; width: 8px; height: 8px; background: #fde047; border: 1px solid #000; transform: translateY(-50%) rotate(45deg); pointer-events: none; }
