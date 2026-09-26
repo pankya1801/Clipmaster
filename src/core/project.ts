@@ -1,6 +1,20 @@
-import type { Clip, MediaAsset, MediaClip, Project, TextClip, Track, TrackKind } from "./types";
+import type { Clip, MediaAsset, MediaClip, Project, TextClip, Track, TrackKind, Transform } from "./types";
 
 export const DEFAULT_IMAGE_SECONDS = 5;
+
+export const IDENTITY_TRANSFORM: Transform = { x: 0.5, y: 0.5, scale: 1, rotation: 0, opacity: 1 };
+
+/** Picture-in-picture presets (corner placement at 35% size). */
+export const PIP_PRESETS: { label: string; t: Transform }[] = [
+  { label: "Top left", t: { x: 0.21, y: 0.23, scale: 0.35, rotation: 0, opacity: 1 } },
+  { label: "Top right", t: { x: 0.79, y: 0.23, scale: 0.35, rotation: 0, opacity: 1 } },
+  { label: "Bottom left", t: { x: 0.21, y: 0.77, scale: 0.35, rotation: 0, opacity: 1 } },
+  { label: "Bottom right", t: { x: 0.79, y: 0.77, scale: 0.35, rotation: 0, opacity: 1 } },
+];
+
+export function isIdentity(t?: Transform) {
+  return !t || (t.x === 0.5 && t.y === 0.5 && t.scale === 1 && t.rotation === 0 && t.opacity === 1);
+}
 export const MIN_CLIP_SECONDS = 0.1;
 
 let counter = 0;
@@ -175,6 +189,17 @@ export function updateClip(p: Project, id: string, patch: ClipPatch): Project {
     const dur = clipDuration(next);
     next.fadeIn = clamp(next.fadeIn, 0, dur);
     next.fadeOut = clamp(next.fadeOut, 0, dur - next.fadeIn);
+    if (next.transform) {
+      const t = next.transform;
+      next.transform = {
+        x: clamp(t.x, -0.5, 1.5),
+        y: clamp(t.y, -0.5, 1.5),
+        scale: clamp(t.scale, 0.05, 4),
+        rotation: ((t.rotation % 360) + 360) % 360,
+        opacity: clamp(t.opacity, 0, 1),
+      };
+      if (isIdentity(next.transform)) next.transform = undefined;
+    }
   } else {
     next.duration = Math.max(MIN_CLIP_SECONDS, next.duration);
     next.x = clamp(next.x, 0, 1);

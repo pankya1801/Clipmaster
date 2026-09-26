@@ -104,23 +104,30 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
       }
       const shown = dur + tail;
       const idx = addInput(asset.path, isImage, shown);
-      const ctx = { W, H, fps, duration: dur };
+      const tf = c.transform;
+      // With a transform the clip keeps its own aspect (no letterbox pad), so
+      // effects see the fitted frame size instead of the canvas size.
+      const fit = fittedSize(asset.width, asset.height, W, H);
+      const ctx = tf ? { W: fit.w, H: fit.h, fps, duration: dur } : { W, H, fps, duration: dur };
       const chain = [
         isImage ? `trim=duration=${n(shown)}` : `trim=start=${n(c.in)}:end=${n(c.out + tail * c.speed)}`,
         `setpts=(PTS-STARTPTS)/${n(c.speed)}`,
-        `scale=${W}:${H}:force_original_aspect_ratio=decrease`,
-        `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black`,
+        tf ? `scale=${fit.w}:${fit.h}` : `scale=${W}:${H}:force_original_aspect_ratio=decrease`,
+        tf ? "" : `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black`,
         "setsar=1",
         `fps=${fps}`,
         ...(c.effects ?? []).map((e) => effectById(e.id)?.filter(e.amount, ctx)).filter((x): x is string => !!x),
         "format=yuva420p",
         ...transitionFilters(c.transIn, c.transOut, dur, ctx),
+        ...(tf ? transformFilters(tf) : []),
         `setpts=PTS+${n(c.start)}/TB`,
-      ];
+      ].filter(Boolean);
       filters.push(`[${idx}:v]${chain.join(",")}[v${vi}]`);
       const pos = slideOverlay(c.transIn, c.start);
+      const cx = n(tf?.x ?? 0.5);
+      const cy = n(tf?.y ?? 0.5);
       filters.push(
-        `[${last}][v${vi}]overlay=x='${pos.x}':y='${pos.y}':eof_action=pass:enable='between(t,${n(c.start)},${n(c.start + shown)})'[o${vi}]`
+        `[${last}][v${vi}]overlay=x='W*${cx}-w/2+(${pos.x})':y='H*${cy}-h/2+(${pos.y})':eof_action=pass:enable='between(t,${n(c.start)},${n(c.start + shown)})'[o${vi}]`
       );
       last = `o${vi}`;
       vi++;
@@ -224,6 +231,26 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
     opts.outputPath
   );
   return { args, files, duration: total };
+}
+
+/** Size of media fitted inside W×H (even dimensions). Unknown size → full frame. */
+export function fittedSize(aw: number | undefined, ah: number | undefined, W: number, H: number) {
+  if (!aw || !ah) return { w: W, h: H };
+  const k = Math.min(W / aw, H / ah);
+  const even = (v: number) => Math.max(2, Math.round(v / 2) * 2);
+  return { w: even(aw * k), h: even(ah * k) };
+}
+
+/** Scale / rotate / opacity for a transformed clip (after alpha format). */
+export function transformFilters(t: { scale: number; rotation: number; opacity: number }): string[] {
+  const out: string[] = [];
+  if (t.scale !== 1) out.push(`scale='trunc(iw*${n(t.scale)}/2)*2':'trunc(ih*${n(t.scale)}/2)*2'`);
+  if (t.rotation) {
+    const a = `${n(t.rotation)}*PI/180`;
+    out.push(`rotate=${a}:c=none:ow='rotw(${a})':oh='roth(${a})'`);
+  }
+  if (t.opacity < 1) out.push(`colorchannelmixer=aa=${n(t.opacity)}`);
+  return out;
 }
 
 /** Parse `-progress pipe:1` output; returns seconds encoded, if present. */

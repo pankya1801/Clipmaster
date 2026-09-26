@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { captionTemplate, groupCaptionLines } from "../core/captions";
 import { effectsCss, transitionPreview } from "../core/effects";
-import { clipDuration, clipEnd, clipsOnTrack, projectDuration, textsAt } from "../core/project";
+import { fittedSize } from "../core/ffmpeg";
+import { clipDuration, clipEnd, clipsOnTrack, IDENTITY_TRANSFORM, projectDuration, textsAt, updateClip } from "../core/project";
 import type { MediaClip, Project } from "../core/types";
 import { mediaUrl } from "../lib/backend";
 import { captionCss } from "../lib/captionStyle";
 import { useEditor } from "../store";
+
+/** Size a transformed layer to the media's fitted box (so outlines hug it). */
+function fittedBox(aw: number | undefined, ah: number | undefined, W: number, H: number, x: number, y: number) {
+  const f = fittedSize(aw, ah, W, H);
+  const w = (f.w / W) * 100;
+  const h = (f.h / H) * 100;
+  return { width: `${w}%`, height: `${h}%`, left: `${x * 100 - w / 2}%`, top: `${y * 100 - h / 2}%` };
+}
 
 export function formatTime(t: number) {
   const m = Math.floor(t / 60);
@@ -136,6 +145,36 @@ export function Preview() {
   useEffect(() => () => audioPool.current.forEach((el) => el.pause()), []);
 
   const scale = box.h / H;
+  const selected = useEditor((s) => s.selected);
+
+  // Drag the selected visual clip to move it; scroll to resize.
+  const dragRef = useRef<{ id: string; x0: number; y0: number; base: Project } | null>(null);
+  const target = layers.find((c) => selected.includes(c.id));
+  const onFramePointerDown = (e: React.PointerEvent) => {
+    if (!target) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    useEditor.getState().checkpoint();
+    dragRef.current = { id: target.id, x0: e.clientX, y0: e.clientY, base: useEditor.getState().project };
+  };
+  const onFramePointerMove = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const c = d.base.clips[d.id];
+    if (c.type !== "media") return;
+    const t = c.transform ?? IDENTITY_TRANSFORM;
+    const snap = (v: number) => (Math.abs(v - 0.5) < 0.015 ? 0.5 : v);
+    useEditor.getState().replace(
+      updateClip(d.base, d.id, {
+        transform: { ...t, x: snap(t.x + (e.clientX - d.x0) / box.w), y: snap(t.y + (e.clientY - d.y0) / box.h) },
+      })
+    );
+  };
+  const onFrameWheel = (e: React.WheelEvent) => {
+    if (!target) return;
+    const t = target.transform ?? IDENTITY_TRANSFORM;
+    useEditor.getState().commit((p) => updateClip(p, target.id, { transform: { ...t, scale: t.scale * (e.deltaY < 0 ? 1.05 : 0.95) } }));
+  };
   const texts = textsAt(project, playhead);
   const captionLines = useMemo(() => {
     const t = captionTemplate(project.captionSettings.templateId);
@@ -145,19 +184,31 @@ export function Preview() {
   return (
     <div className="preview-wrap">
       <div className="stage" ref={stageRef}>
-        <div className="frame" style={{ width: box.w, height: box.h }}>
+        <div
+          className="frame"
+          style={{ width: box.w, height: box.h, cursor: target ? "move" : undefined }}
+          onPointerDown={onFramePointerDown}
+          onPointerMove={onFramePointerMove}
+          onPointerUp={() => (dragRef.current = null)}
+          onWheel={onFrameWheel}
+          title={target ? "Drag to move · scroll to resize" : undefined}
+        >
           {layers.map((c) => {
             const asset = project.assets[c.assetId];
             if (!asset) return null;
             const fx = effectsCss(c.effects ?? []);
             const tr = transitionPreview(c.transIn, c.transOut, playhead - c.start, clipDuration(c));
+            const tf = c.transform;
+            const place = tf ? `scale(${tf.scale}) rotate(${tf.rotation}deg)` : "";
             const style = {
               filter: [fx.filter, tr.filter].filter(Boolean).join(" ") || undefined,
-              transform: [tr.transform, fx.transform].filter(Boolean).join(" ") || undefined,
-              opacity: tr.opacity,
+              transform: [place, tr.transform, fx.transform].filter(Boolean).join(" ") || undefined,
+              opacity: tr.opacity * (tf?.opacity ?? 1),
+              outline: selected.includes(c.id) && tf ? "2px dashed #a78bfa" : undefined,
+              ...(tf ? fittedBox(asset.width, asset.height, W, H, tf.x, tf.y) : {}),
             };
             return asset.kind === "image" ? (
-              <img key={c.id} className="layer" src={mediaUrl(asset.path)} style={style} alt="" />
+              <img key={c.id} className="layer" src={mediaUrl(asset.path)} style={style} alt="" draggable={false} />
             ) : (
               <video
                 key={c.id}

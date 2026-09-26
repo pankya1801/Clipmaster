@@ -43,6 +43,19 @@ export interface MediaClip extends ClipBase {
   effects: AppliedEffect[];
   transIn?: AppliedTransition;
   transOut?: AppliedTransition;
+  /** Position/scale/rotation/opacity. Undefined = fill the frame. */
+  transform?: Transform;
+}
+
+export interface Transform {
+  /** Centre of the clip, 0..1 of the frame. */
+  x: number;
+  y: number;
+  /** 1 = fit the frame. */
+  scale: number;
+  /** Degrees, clockwise. */
+  rotation: number;
+  opacity: number; // 0..1
 }
 
 export interface AppliedEffect {

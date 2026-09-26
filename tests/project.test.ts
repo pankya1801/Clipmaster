@@ -109,3 +109,13 @@ describe("helpers", () => {
     expect(addText(p, "t_v1", 1).clipId).toBeUndefined();
   });
 });
+
+describe("transform", () => {
+  it("clamps values and drops identity transforms", () => {
+    const { p, v } = setup();
+    const t = updateClip(p, v, { transform: { x: 0.8, y: 0.2, scale: 9, rotation: -30, opacity: 2 } });
+    expect(media(t, v).transform).toEqual({ x: 0.8, y: 0.2, scale: 4, rotation: 330, opacity: 1 });
+    const back = updateClip(t, v, { transform: { x: 0.5, y: 0.5, scale: 1, rotation: 0, opacity: 1 } });
+    expect(media(back, v).transform).toBeUndefined();
+  });
+});
