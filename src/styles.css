@@ -153,3 +153,35 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; }
 .fx-item { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; display: grid; gap: 4px; }
 .kbd { font-family: ui-monospace, monospace; font-size: 11px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
 .clip .kf-dot { position: absolute; top: 50%; width: 8px; height: 8px; background: #fde047; border: 1px solid #000; transform: translateY(-50%) rotate(45deg); pointer-events: none; }
+
+/* ---------- template thumbnails ---------- */
+.card .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cap-thumb { background: #000; }
+
+/* Transition previews: the "next clip" (colour) animates over the "previous clip" (b&w) on hover. */
+.tr-thumb .tr-to { animation: none; }
+.card:hover .tr-thumb .tr-to, .card.active .tr-thumb .tr-to { animation-duration: 1.4s; animation-iteration-count: infinite; animation-timing-function: cubic-bezier(.2,.7,.2,1); }
+.card:not(:hover):not(.active) .tr-thumb .tr-to[class*="tr-fade-out"],
+.card:not(:hover):not(.active) .tr-thumb .tr-to[class*="tr-dip-white"] { opacity: 1; }
+.card:hover .tr-fade-in, .card.active .tr-fade-in { animation-name: tr-fade; }
+.card:hover .tr-dissolve, .card.active .tr-dissolve { animation-name: tr-fade; }
+.card:hover .tr-blur-in, .card.active .tr-blur-in { animation-name: tr-blur; }
+.card:hover .tr-flash, .card.active .tr-flash { animation-name: tr-flash; }
+.card:hover .tr-zoom-pop, .card.active .tr-zoom-pop { animation-name: tr-zoom; }
+.card:hover .tr-slide-left, .card.active .tr-slide-left { animation-name: tr-slide-left; }
+.card:hover .tr-slide-right, .card.active .tr-slide-right { animation-name: tr-slide-right; }
+.card:hover .tr-slide-up, .card.active .tr-slide-up { animation-name: tr-slide-up; }
+.card:hover .tr-slide-down, .card.active .tr-slide-down { animation-name: tr-slide-down; }
+.card:hover .tr-fade-out, .card.active .tr-fade-out { animation-name: tr-fade-out; }
+.card:hover .tr-dip-white, .card.active .tr-dip-white { animation-name: tr-dip-white; }
+@keyframes tr-fade { 0%, 15% { opacity: 0 } 70%, 100% { opacity: 1 } }
+@keyframes tr-blur { 0%, 15% { opacity: 0; filter: blur(8px) } 70%, 100% { opacity: 1; filter: blur(0) } }
+@keyframes tr-flash { 0%, 15% { opacity: 0 } 20% { opacity: 1; filter: brightness(3) } 60%, 100% { opacity: 1; filter: brightness(1) } }
+@keyframes tr-zoom { 0%, 15% { opacity: 0; transform: scale(1.4) } 20% { opacity: 1 } 70%, 100% { opacity: 1; transform: scale(1) } }
+@keyframes tr-slide-left { 0%, 15% { transform: translateX(100%) } 70%, 100% { transform: translateX(0) } }
+@keyframes tr-slide-right { 0%, 15% { transform: translateX(-100%) } 70%, 100% { transform: translateX(0) } }
+@keyframes tr-slide-up { 0%, 15% { transform: translateY(100%) } 70%, 100% { transform: translateY(0) } }
+@keyframes tr-slide-down { 0%, 15% { transform: translateY(-100%) } 70%, 100% { transform: translateY(0) } }
+@keyframes tr-fade-out { 0%, 25% { opacity: 1 } 80%, 100% { opacity: 0 } }
+@keyframes tr-dip-white { 0%, 25% { opacity: 1; filter: brightness(1) } 80%, 100% { opacity: 1; filter: brightness(4) } }
+@media (prefers-reduced-motion: reduce) { .tr-thumb .tr-to { animation: none !important; } }
