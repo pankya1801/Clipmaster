@@ -114,7 +114,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
 export function AutoEditDialog({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<"talk" | "music">("talk");
   const [beat, setBeat] = useState({ everyBeats: 2, muteClips: true, punchIn: true, flash: false });
-  const [opts, setOpts] = useState({ ...DEFAULT_AUTO_EDIT, captions: true, noiseDb: -35, minSilence: 0.45 });
+  const [opts, setOpts] = useState({ ...DEFAULT_AUTO_EDIT, captions: true, noiseDb: -35, minSilence: 0.45, duck: true, autoZoom: true });
   const [busy, setBusy] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const set = (patch: Partial<typeof opts>) => setOpts((o) => ({ ...o, ...patch }));
@@ -150,6 +150,7 @@ export function AutoEditDialog({ onClose }: { onClose: () => void }) {
             <input type="range" min={0.2} max={2} step={0.05} value={opts.minSilence} onChange={(e) => set({ minSilence: +e.target.value })} /></label>
         </div>
       )}
+      <label className="check"><input type="checkbox" checked={opts.duck} onChange={(e) => set({ duck: e.target.checked })} /> Duck background music under speech</label>
       <label className="check"><input type="checkbox" checked={opts.punchIn} onChange={(e) => set({ punchIn: e.target.checked })} /> Punch-in zoom on every other cut</label>
       <label className="check"><input type="checkbox" checked={opts.captions} onChange={(e) => set({ captions: e.target.checked })} /> Auto captions (download a model once in Settings)</label>
       <div className="row">

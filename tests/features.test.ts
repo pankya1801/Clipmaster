@@ -157,6 +157,36 @@ describe.skipIf(!hasFfmpeg)("real ffmpeg: every effect, transition and caption t
     expect(level(chain, 2.5, 3.8)).toBeGreaterThan(level("anull", 2.5, 3.8) - 3); // voice
   });
 
+  it("auto-ducking lowers music while someone speaks", () => {
+    const voiceSrc = join(dir, "voice.mp4");
+    const musicSrc = join(dir, "music.wav");
+    // "Speech": 1 kHz tone only between 2 s and 4 s. Music: constant 200 Hz.
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=s=160x120:d=6", "-f", "lavfi",
+      "-i", "aevalsrc='0.5*sin(2*PI*1000*t)*between(t,2,4)':d=6", "-shortest", "-pix_fmt", "yuv420p", voiceSrc]);
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=200:d=6,volume=0.3", musicSrc]);
+    const render = (autoDuck: boolean) => {
+      let p = createProject();
+      p = { ...p, settings: { width: 160, height: 120, fps: 24, autoDuck } };
+      p = addAsset(p, { id: "v", path: voiceSrc, name: "v", kind: "video", duration: 6, hasAudio: true });
+      p = addAsset(p, { id: "m", path: musicSrc, name: "m", kind: "audio", duration: 6, hasAudio: true });
+      p = placeAsset(placeAsset(p, "v", "t_v1").project, "m", "t_a1").project;
+      const out = join(dir, `duck-${autoDuck}.mp4`);
+      execFileSync("ffmpeg", buildExportPlan(p, { outputPath: out, tempDir: dir, quality: "draft" }).args, { stdio: "pipe" });
+      return out;
+    };
+    const musicLevel = (file: string, from: number, to: number) => {
+      const r = spawnSync("ffmpeg", ["-i", file, "-af", `bandpass=f=200:width_type=q:w=10,bandpass=f=200:width_type=q:w=10,atrim=${from}:${to},volumedetect`, "-f", "null", "-"]);
+      return Number(/mean_volume: (-?[\d.]+)/.exec(r.stderr.toString())![1]);
+    };
+    const ducked = render(true);
+    const plain = render(false);
+    // Without ducking the music is steady; with it, it drops by at least 6 dB during speech.
+    expect(Math.abs(musicLevel(plain, 2.5, 3.5) - musicLevel(plain, 0.5, 1.5))).toBeLessThan(1.5);
+    expect(musicLevel(ducked, 2.5, 3.5)).toBeLessThan(musicLevel(ducked, 0.5, 1.5) - 6);
+    // And it comes back after speech ends.
+    expect(musicLevel(ducked, 5.2, 5.9)).toBeGreaterThan(musicLevel(ducked, 2.5, 3.5) + 4);
+  });
+
   it("keyframes: animated position, scale, rotation and opacity", () => {
     const out = join(dir, "kf.mp4");
     let p = createProject();

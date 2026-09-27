@@ -152,6 +152,10 @@ function ProjectInspector() {
           {[24, 25, 30, 50, 60].map((f) => <option key={f} value={f}>{f} fps</option>)}
         </select>
       </label>
+      <label className="check" title="Lowers music on audio tracks automatically whenever a video clip has sound (speech). Exact on export; approximate in preview.">
+        <input type="checkbox" checked={!!settings.autoDuck} onChange={(e) => commit((p) => ({ ...p, settings: { ...p.settings, autoDuck: e.target.checked } }))} />
+        🎚 Auto-duck music under speech
+      </label>
       <div className="section-title">Shortcuts</div>
       <div className="small muted" style={{ display: "grid", gap: 4 }}>
         {SHORTCUTS.map(([k, v]) => <div key={k} className="row"><span className="kbd">{k}</span><span>{v}</span></div>)}

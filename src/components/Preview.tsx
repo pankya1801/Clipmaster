@@ -132,7 +132,9 @@ export function Preview() {
         el.preload = "auto";
         audioPool.current.set(c.id, el);
       }
-      syncMedia(el, c, playhead, playing, gainAt(c, playhead));
+      // Preview approximation of auto-ducking: quieter music while a clip with sound plays.
+      const duck = project.settings.autoDuck && layers.some((l) => project.assets[l.assetId]?.hasAudio) ? 0.3 : 1;
+      syncMedia(el, c, playhead, playing, gainAt(c, playhead) * duck);
     }
     for (const [id, el] of audioPool.current) {
       if (!live.has(id)) {

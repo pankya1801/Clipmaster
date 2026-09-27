@@ -42,6 +42,9 @@ const QUALITY: Record<ExportQuality, { preset: string; crf: number }> = {
  */
 export const VOICE_CLEANUP = ["highpass=f=80", "afftdn=nr=20:nf=-40", "anlmdn=s=7"];
 
+/** Music ducking: ~-12 dB under speech, fast attack, gentle release. */
+export const DUCKING = "sidechaincompress=threshold=0.015:ratio=12:attack=20:release=450:makeup=1";
+
 const n = (v: number) => Number(v.toFixed(4)).toString();
 
 /** atempo only accepts 0.5..2 (older builds); chain filters for other speeds. */
@@ -95,7 +98,8 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
 
   // Visual layers: bottom track first so upper tracks overlay it.
   const videoTracks = p.tracks.filter((t) => t.kind === "video" && !t.hidden).reverse();
-  const audioClips: { clip: MediaClip; input: number }[] = [];
+  // Voice = sound from video clips; music = clips on audio tracks.
+  const audioClips: { clip: MediaClip; input: number; role: "voice" | "music" }[] = [];
 
   for (const track of videoTracks) {
     const clips = clipsOnTrack(p, track.id);
@@ -143,7 +147,7 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
       );
       last = `o${vi}`;
       vi++;
-      if (asset.hasAudio && !track.muted && !isImage) audioClips.push({ clip: c, input: idx });
+      if (asset.hasAudio && !track.muted && !isImage) audioClips.push({ clip: c, input: idx, role: "voice" });
     });
   }
 
@@ -153,7 +157,7 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
       if (c.type !== "media") continue;
       const asset = p.assets[c.assetId];
       if (!asset?.hasAudio) continue;
-      audioClips.push({ clip: c, input: addInput(asset.path, false, 0) });
+      audioClips.push({ clip: c, input: addInput(asset.path, false, 0), role: "music" });
     }
   }
 
@@ -208,9 +212,18 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
     ].filter(Boolean);
     filters.push(`[${input}:a]${chain.join(",")}[a${i}]`);
   });
-  if (audioClips.length) {
+  const loud = opts.normalizeLoudness ? ",loudnorm=I=-14:TP=-1.5:LRA=11" : "";
+  const voice = audioClips.map((a, i) => ({ ...a, i })).filter((a) => a.role === "voice");
+  const music = audioClips.map((a, i) => ({ ...a, i })).filter((a) => a.role === "music");
+  if (p.settings.autoDuck && voice.length && music.length) {
+    // Duck the music under speech: the voice mix drives a sidechain compressor on the music.
+    const mix = (xs: typeof voice) => `${xs.map((a) => `[a${a.i}]`).join("")}amix=inputs=${xs.length}:duration=longest:normalize=0`;
+    filters.push(`${mix(voice)},asplit=2[vox][voxsc]`);
+    filters.push(`${mix(music)}[mus]`);
+    filters.push(`[mus][voxsc]${DUCKING}[ducked]`);
+    filters.push(`[vox][ducked]amix=inputs=2:duration=longest:normalize=0${loud},aresample=48000,apad[aout]`);
+  } else if (audioClips.length) {
     const labels = audioClips.map((_, i) => `[a${i}]`).join("");
-    const loud = opts.normalizeLoudness ? ",loudnorm=I=-14:TP=-1.5:LRA=11" : "";
     filters.push(`${labels}amix=inputs=${audioClips.length}:duration=longest:normalize=0${loud},aresample=48000,apad[aout]`);
   } else {
     filters.push(`anullsrc=r=48000:cl=stereo[aout]`);

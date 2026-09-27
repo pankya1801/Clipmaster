@@ -246,7 +246,7 @@ function pickTextFile(accept: string): Promise<string | null> {
 // ---------- auto edit ----------
 
 export async function runAutoEdit(
-  opts: AutoEditOptions & { captions: boolean; noiseDb: number; minSilence: number },
+  opts: AutoEditOptions & { captions: boolean; noiseDb: number; minSilence: number; duck?: boolean; autoZoom?: boolean },
   onProgress: (msg: string) => void
 ): Promise<string> {
   const { project } = S();
@@ -265,7 +265,7 @@ export async function runAutoEdit(
     }
   }
   const r = applyAutoEdit(project, silences, opts);
-  S().commit(() => r.project);
+  S().commit(() => (opts.duck ? { ...r.project, settings: { ...r.project.settings, autoDuck: true } } : r.project));
   let msg = `Removed ${r.removedSeconds.toFixed(1)}s of silence with ${r.cuts} cuts.`;
   if (opts.captions) {
     try {

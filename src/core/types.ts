@@ -95,6 +95,8 @@ export interface ProjectSettings {
   width: number;
   height: number;
   fps: number;
+  /** Lower background music automatically while someone is speaking. */
+  autoDuck?: boolean;
 }
 
 export interface CaptionWord {
