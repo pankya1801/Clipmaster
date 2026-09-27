@@ -6,6 +6,7 @@ import { projectDuration } from "../core/project";
 import { errorText, loadWhisperConfig, runAutoEdit, runBeatSync, saveWhisperConfig, WhisperModel } from "../lib/actions";
 import { invoke, isTauri, saveDialog } from "../lib/backend";
 import { useEditor } from "../store";
+import { SHORTCUTS } from "./shortcuts";
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
@@ -274,6 +275,17 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       )}
       <div className="row"><span className="grow" /><button onClick={onClose}>Cancel</button>
         <button className="primary" onClick={() => { saveWhisperConfig(cfg); onClose(); }}>Save</button></div>
+    </Modal>
+  );
+}
+
+export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal title="Keyboard shortcuts" onClose={onClose}>
+      <div className="small muted" style={{ display: "grid", gap: 4 }}>
+        {SHORTCUTS.map(([k, v]) => <div key={k} className="row"><span className="kbd">{k}</span><span>{v}</span></div>)}
+      </div>
+      <div className="row"><span className="grow" /><button className="primary" onClick={onClose}>Done</button></div>
     </Modal>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AutoEditDialog, ExportDialog, SettingsDialog } from "./components/Dialogs";
+import { AutoEditDialog, ExportDialog, SettingsDialog, ShortcutsDialog } from "./components/Dialogs";
 import { Inspector } from "./components/Inspector";
 import { LeftPanel } from "./components/LeftPanel";
 import { Preview } from "./components/Preview";
@@ -14,7 +14,7 @@ import { useEditor } from "./store";
 const AUTOSAVE_KEY = "cm.autosave";
 
 export default function App() {
-  const [dialog, setDialog] = useState<"export" | "auto" | "settings" | null>(null);
+  const [dialog, setDialog] = useState<"export" | "auto" | "settings" | "shortcuts" | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [ffmpegMissing, setFfmpegMissing] = useState(false);
   const [tlHeight, setTlHeight] = useState(300);
@@ -104,6 +104,7 @@ export default function App() {
       else if (key === "=" || key === "+") s.setZoom(s.zoom * 1.25);
       else if (key === "-") s.setZoom(s.zoom * 0.8);
       else if (key === "escape") s.select([]);
+      else if (key === "?") (setDialog("shortcuts"), handled());
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -135,6 +136,7 @@ export default function App() {
         <button onClick={importMedia}>＋ Import</button>
         <span className="grow" />
         <span className="muted small">{name}{dirty ? " •" : ""}</span>
+        <button className="ghost" onClick={() => setDialog("shortcuts")} title="Keyboard shortcuts (?)">?</button>
         <button className="ghost" onClick={() => setDialog("settings")}>⚙ Settings</button>
         <button onClick={() => setDialog("auto")} disabled={!hasClips}>✨ Auto Edit</button>
         <button className="primary" onClick={() => setDialog("export")} disabled={!hasClips}>Export</button>
@@ -155,6 +157,7 @@ export default function App() {
       {dialog === "export" && <ExportDialog onClose={() => setDialog(null)} />}
       {dialog === "auto" && <AutoEditDialog onClose={() => setDialog(null)} />}
       {dialog === "settings" && <SettingsDialog onClose={() => setDialog(null)} />}
+      {dialog === "shortcuts" && <ShortcutsDialog onClose={() => setDialog(null)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

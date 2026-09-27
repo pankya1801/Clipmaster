@@ -4,6 +4,7 @@ import { upsertKeyframe } from "../core/keyframes";
 import { ASPECT_PRESETS, MediaClip, TextClip } from "../core/types";
 import { useEditor } from "../store";
 import { formatTime } from "./Preview";
+import { SHORTCUTS } from "./shortcuts";
 
 function Num({ label, value, min, max, step = 0.1, suffix = "", onChange }: {
   label: string; value: number; min: number; max: number; step?: number; suffix?: string; onChange: (v: number) => void;
@@ -153,11 +154,7 @@ function ProjectInspector() {
       </label>
       <div className="section-title">Shortcuts</div>
       <div className="small muted" style={{ display: "grid", gap: 4 }}>
-        {[
-          ["Space", "Play / pause"], ["S", "Split at playhead"], ["Del", "Delete"], ["Shift+Del", "Ripple delete"],
-          ["Ctrl+Z / Ctrl+Shift+Z", "Undo / redo"], ["Ctrl+D", "Duplicate"], ["T", "Add text"], ["← / →", "Step one frame"],
-          ["Ctrl+S", "Save"], ["Ctrl+I", "Import"], ["Ctrl+E", "Export"], ["Ctrl+scroll", "Zoom timeline"],
-        ].map(([k, v]) => <div key={k} className="row"><span className="kbd">{k}</span><span>{v}</span></div>)}
+        {SHORTCUTS.map(([k, v]) => <div key={k} className="row"><span className="kbd">{k}</span><span>{v}</span></div>)}
       </div>
     </>
   );
