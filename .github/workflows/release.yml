@@ -1,8 +1,9 @@
 name: Release
 
 # Builds installers for Windows, macOS (Apple Silicon + Intel) and Linux with
-# FFmpeg and whisper.cpp bundled, and attaches them to a draft GitHub release.
-# Trigger: push a tag like v0.2.0, or run manually from the Actions tab.
+# FFmpeg and whisper.cpp bundled, and publishes them as GitHub release
+# v<version from tauri.conf.json> with notes from .github/release-notes.md.
+# Trigger: run manually from the Actions tab (or push a tag like v0.2.0).
 
 on:
   push:
@@ -53,15 +54,22 @@ jobs:
           WHISPER_CMAKE_ARGS: ${{ matrix.whisper_cmake }}
         run: scripts/fetch-sidecars.sh ${{ matrix.target }}
       - run: npm ci
+      - name: Release notes
+        id: notes
+        shell: bash
+        run: |
+          {
+            echo "body<<__NOTES__"
+            cat .github/release-notes.md
+            echo "__NOTES__"
+          } >> "$GITHUB_OUTPUT"
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', '__VERSION__') }}
-          releaseName: Clipmaster ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
-          releaseBody: |
-            Free, open-source video editor. FFmpeg and whisper.cpp are included — just install and edit.
-            macOS: the app is not notarized yet; right-click → Open the first time.
-          releaseDraft: true
-          prerelease: true
+          tagName: v__VERSION__
+          releaseName: Clipmaster v__VERSION__
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: false
+          prerelease: false
           args: --target ${{ matrix.target }} --config src-tauri/tauri.bundle.conf.json
