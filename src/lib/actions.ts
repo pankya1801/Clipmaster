@@ -46,7 +46,7 @@ export function addAssetToTimeline(assetId: string, trackId?: string, at?: numbe
   }
 }
 
-export function addTextAtPlayhead(text?: string) {
+export function addTextAtPlayhead(text?: string, presetId?: string) {
   const { project, playhead } = S();
   let p = project;
   let track = p.tracks.find((t) => t.kind === "text");
@@ -54,7 +54,7 @@ export function addTextAtPlayhead(text?: string) {
     p = addTrack(p, "text");
     track = p.tracks.find((t) => t.kind === "text")!;
   }
-  const r = addText(p, track.id, playhead, text);
+  const r = addText(p, track.id, playhead, text, presetId);
   if (r.clipId) {
     S().commit(() => r.project);
     S().select([r.clipId]);

@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { CAPTION_TEMPLATES } from "../core/captions";
 import { EFFECTS, EffectCategory, TRANSITIONS } from "../core/effects";
+import { TEXT_PRESETS } from "../core/textPresets";
 import type { MediaClip } from "../core/types";
 import { updateClip } from "../core/project";
-import { addAssetToTimeline, autoCaptions, autoZoom, errorText, exportSrt, importMedia, importSrt, notify } from "../lib/actions";
+import { addAssetToTimeline, addTextAtPlayhead, autoCaptions, autoZoom, errorText, exportSrt, importMedia, importSrt, notify } from "../lib/actions";
 import { captionCss } from "../lib/captionStyle";
 import { useEditor } from "../store";
 import previewImage from "../assets/preview.jpg";
@@ -13,14 +14,14 @@ const FX_THUMBS = import.meta.glob("../assets/fx/*.jpg", { eager: true, import: 
 const fxThumb = (id: string) => FX_THUMBS[`../assets/fx/${id}.jpg`] ?? previewImage;
 import { formatTime } from "./Preview";
 
-type Tab = "media" | "effects" | "transitions" | "captions";
+type Tab = "media" | "text" | "effects" | "transitions" | "captions";
 
 export function LeftPanel() {
   const [tab, setTab] = useState<Tab>("media");
   return (
     <div className="panel">
       <div className="tabs">
-        {(["media", "effects", "transitions", "captions"] as Tab[]).map((t) => (
+        {(["media", "text", "effects", "transitions", "captions"] as Tab[]).map((t) => (
           <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
             {t[0].toUpperCase() + t.slice(1)}
           </button>
@@ -28,6 +29,7 @@ export function LeftPanel() {
       </div>
       <div className="panel-body" key={tab}>
         {tab === "media" && <MediaTab />}
+        {tab === "text" && <TextTab />}
         {tab === "effects" && <EffectsTab />}
         {tab === "transitions" && <TransitionsTab />}
         {tab === "captions" && <CaptionsTab />}
@@ -65,6 +67,29 @@ function MediaTab() {
           </div>
         ))}
       </div>
+    </>
+  );
+}
+
+function TextTab() {
+  const categories = [...new Set(TEXT_PRESETS.map((p) => p.category))];
+  return (
+    <>
+      <p className="muted small">Animated titles and lower thirds. Click to add at the playhead, then edit the text in the Inspector. Use a new line for a subtitle.</p>
+      <button onClick={() => addTextAtPlayhead()}>T Plain text</button>
+      {categories.map((cat) => (
+        <div key={cat}>
+          <div className="section-title">{cat}</div>
+          <div className="grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
+            {TEXT_PRESETS.filter((p) => p.category === cat).map((p) => (
+              <button key={p.id} className="card" onClick={() => addTextAtPlayhead(undefined, p.id)} title={`Add “${p.name}” at the playhead`}>
+                <div className="thumb"><img src={fxThumb(`text-${p.id}`)} alt="" loading="lazy" draggable={false} /></div>
+                <div className="label">{p.name}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
     </>
   );
 }

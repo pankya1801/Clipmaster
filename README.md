@@ -33,11 +33,13 @@ Many popular editors keep auto-captions, effects or watermark-free export behind
 | **25 caption templates** | Word-by-word highlight, karaoke, one-word pop, neon, boxed, typewriter and more. Captions are rendered with real outlines and animations. |
 | **Auto captions** | Runs [whisper.cpp](https://github.com/ggml-org/whisper.cpp) locally, so your audio never leaves your computer. One-click model download; you can also import or export SRT files. |
 | **Picture-in-picture** | Position, scale, rotation and opacity for any clip. Drag it in the preview, or use the corner presets. |
+| **Animated text & lower thirds** | 12 motion-graphics templates: pop, slide and neon titles, typewriter, quotes, name lower thirds, chapter tags, breaking-news banner, and subscribe/follow buttons. |
+| **🎯 Auto zoom** | Punch-in and push-in zooms on the key words of your video, found automatically from the captions. |
 | **Keyframe animation** | Animate position, scale, rotation and opacity with smooth easing. What you see in the preview is exactly what exports. |
 | **32 effects** | Color grading (cinematic teal & orange, vintage, noir, warm/cool…), stylize (vignette, film grain, glitch, RGB split, pixelate…) and motion (Ken Burns, slow zoom, punch-in, camera shake). |
 | **11 transitions** | Cross dissolve, fade, flash, four slides, zoom pop, blur in, fade out, dip to white. |
 | **✨ Auto Edit** | *Talking video:* removes silences, hides jump cuts with punch-in zooms, adds captions and applies a look. *Music montage:* detects the song's beat and cuts your clips and photos to it. |
-| **Audio** | Per-clip volume (0–200%), fades, speed 0.25×–4× with pitch-correct audio, one-click **voice clean-up** (noise reduction), and loudness normalization to −14 LUFS for social media. |
+| **Audio** | Per-clip volume (0–200%), fades, speed 0.25×–4× with pitch-correct audio, one-click **voice clean-up** (noise reduction), **auto-ducking** of music under speech, and loudness normalization to −14 LUFS for social media. |
 | **Export** | MP4 (H.264/AAC) with progress and cancel. No watermark, no limits. |
 | **Safe** | Project files (`.clipmaster`), autosave and crash recovery. |
 
@@ -90,6 +92,8 @@ src/core/        Pure TypeScript, fully unit-tested
   autoedit.ts    Silence detection and jump-cut logic
   beats.ts       Beat detection and beat-synced montage
   keyframes.ts   Keyframe interpolation (shared by preview and export)
+  textPresets.ts Animated text / lower-third templates (ASS)
+  autozoom.ts    Emphasis detection → zoom keyframes
 src/components/  React UI (preview, timeline, panels, dialogs)
 src-tauri/       Rust backend: ffprobe, thumbnails, export runner, whisper
 src-tauri/fonts  Caption fonts (SIL Open Font License)

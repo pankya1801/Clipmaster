@@ -1,4 +1,5 @@
 import { sampleKeyframes, upsertKeyframe } from "./keyframes";
+import { textPreset } from "./textPresets";
 import type { Clip, MediaAsset, MediaClip, Project, TextClip, Track, TrackKind, Transform } from "./types";
 
 export const DEFAULT_IMAGE_SECONDS = 5;
@@ -159,7 +160,7 @@ export function placeAsset(p: Project, assetId: string, trackId: string, at?: nu
   return { project: withClip(p, clip), clipId: clip.id };
 }
 
-export function addText(p: Project, trackId: string, at: number, text = "Your text"): { project: Project; clipId?: string } {
+export function addText(p: Project, trackId: string, at: number, text = "Your text", presetId?: string): { project: Project; clipId?: string } {
   const track = p.tracks.find((t) => t.id === trackId);
   if (!track || track.kind !== "text") return { project: p };
   const clip: TextClip = {
@@ -175,6 +176,19 @@ export function addText(p: Project, trackId: string, at: number, text = "Your te
     color: "#ffffff",
     box: true,
   };
+  const preset = textPreset(presetId);
+  if (preset) {
+    Object.assign(clip, {
+      preset: preset.id,
+      text: text === "Your text" ? preset.sample : text,
+      x: preset.x,
+      y: preset.y,
+      fontSize: Math.round(preset.size * p.settings.height),
+      color: preset.color,
+      accent: preset.accent,
+      box: false,
+    });
+  }
   return { project: withClip(p, clip), clipId: clip.id };
 }
 

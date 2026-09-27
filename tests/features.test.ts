@@ -7,7 +7,8 @@ import { applyAutoEdit, keptRanges, parseSilenceDetect, DEFAULT_AUTO_EDIT } from
 import { assColor, buildAss, CAPTION_TEMPLATES, groupCaptionLines, parseSrt, toSrt } from "../src/core/captions";
 import { EFFECTS, TRANSITIONS } from "../src/core/effects";
 import { buildExportPlan, VOICE_CLEANUP } from "../src/core/ffmpeg";
-import { addAsset, addTrack, clipsOnTrack, createProject, placeAsset, updateClip } from "../src/core/project";
+import { addAsset, addText, addTrack, clipsOnTrack, createProject, placeAsset, updateClip } from "../src/core/project";
+import { TEXT_PRESETS } from "../src/core/textPresets";
 import type { CaptionWord, MediaClip } from "../src/core/types";
 
 const words: CaptionWord[] = "Hello world this is Clipmaster. It makes captions easy!"
@@ -185,6 +186,20 @@ describe.skipIf(!hasFfmpeg)("real ffmpeg: every effect, transition and caption t
     expect(musicLevel(ducked, 2.5, 3.5)).toBeLessThan(musicLevel(ducked, 0.5, 1.5) - 6);
     // And it comes back after speech ends.
     expect(musicLevel(ducked, 5.2, 5.9)).toBeGreaterThan(musicLevel(ducked, 2.5, 3.5) + 4);
+  });
+
+  it.each(TEXT_PRESETS.map((t) => t.id))("text template %s renders", (id) => {
+    const out = join(dir, `text-${id}.mp4`);
+    let p = createProject();
+    p = { ...p, settings: { width: 320, height: 240, fps: 24 } };
+    p = addAsset(p, { id: "v", path: src, name: "v", kind: "video", duration: 3, hasAudio: true });
+    p = placeAsset(p, "v", "t_v1").project;
+    p = addText(p, "t_text", 0.2, undefined, id).project;
+    const plan = buildExportPlan(p, { outputPath: out, tempDir: dir, quality: "draft", fontsDir });
+    expect(plan.files.some((f) => f.path.endsWith("clipmaster_text.ass"))).toBe(true);
+    for (const f of plan.files) writeFileSync(f.path, f.content);
+    execFileSync("ffmpeg", plan.args, { stdio: "pipe" });
+    expect(existsSync(out)).toBe(true);
   });
 
   it("keyframes: animated position, scale, rotation and opacity", () => {

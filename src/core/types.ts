@@ -87,6 +87,10 @@ export interface TextClip extends ClipBase {
   fontSize: number; // px at output resolution
   color: string; // #rrggbb
   box: boolean; // background box behind text
+  /** Animated text / motion-graphics template id (see textPresets.ts). */
+  preset?: string;
+  /** Accent colour used by some templates (bars, boxes, glow). */
+  accent?: string;
 }
 
 export type Clip = MediaClip | TextClip;

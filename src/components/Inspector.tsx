@@ -1,6 +1,7 @@
 import { effectById, transitionById, TRANSITIONS } from "../core/effects";
 import { clipDuration, IDENTITY_TRANSFORM, PIP_PRESETS, transformAt, transformPatch, updateClip } from "../core/project";
 import { upsertKeyframe } from "../core/keyframes";
+import { TEXT_PRESETS } from "../core/textPresets";
 import { ASPECT_PRESETS, MediaClip, TextClip } from "../core/types";
 import { useEditor } from "../store";
 import { formatTime } from "./Preview";
@@ -107,7 +108,17 @@ function TextInspector({ clip }: { clip: TextClip }) {
   return (
     <>
       <label className="field">
-        <span>Text</span>
+        <span>Template</span>
+        <select value={clip.preset ?? ""} onChange={(e) => {
+          const p = TEXT_PRESETS.find((x) => x.id === e.target.value);
+          set(p ? { preset: p.id, x: p.x, y: p.y, color: p.color, accent: p.accent, box: false } : { preset: undefined });
+        }}>
+          <option value="">Plain text</option>
+          {TEXT_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.category} · {p.name}</option>)}
+        </select>
+      </label>
+      <label className="field">
+        <span>Text {clip.preset ? "(new line = subtitle)" : ""}</span>
         <textarea rows={3} value={clip.text} onChange={(e) => set({ text: e.target.value })} />
       </label>
       <Num label="Duration" value={clip.duration} min={0.2} max={30} suffix="s" onChange={(duration) => set({ duration })} />
@@ -116,7 +127,11 @@ function TextInspector({ clip }: { clip: TextClip }) {
       <Num label="Vertical" value={clip.y * 100} min={0} max={100} step={1} suffix="%" onChange={(v) => set({ y: v / 100 })} />
       <div className="row">
         <label className="check"><input type="color" value={clip.color} onChange={(e) => set({ color: e.target.value })} /> Colour</label>
-        <label className="check"><input type="checkbox" checked={clip.box} onChange={(e) => set({ box: e.target.checked })} /> Background box</label>
+        {clip.preset ? (
+          <label className="check"><input type="color" value={clip.accent ?? "#8b5cf6"} onChange={(e) => set({ accent: e.target.value })} /> Accent</label>
+        ) : (
+          <label className="check"><input type="checkbox" checked={clip.box} onChange={(e) => set({ box: e.target.checked })} /> Background box</label>
+        )}
       </div>
     </>
   );

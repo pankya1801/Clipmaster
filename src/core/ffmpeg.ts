@@ -2,6 +2,7 @@ import { clipDuration, clipEnd, clipsOnTrack, projectDuration } from "./project"
 import { buildAss } from "./captions";
 import { effectById, slideOverlay, transitionFilters } from "./effects";
 import { isAnimated, keyframeExpr } from "./keyframes";
+import { buildTextAss, textPreset } from "./textPresets";
 import type { Keyframe, MediaClip, Project, TextClip } from "./types";
 
 export type ExportQuality = "draft" | "standard" | "high";
@@ -166,7 +167,7 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
     .filter((t) => t.kind === "text" && !t.hidden)
     .reverse()
     .flatMap((t) => clipsOnTrack(p, t.id))
-    .filter((c): c is TextClip => c.type === "text" && c.text.trim().length > 0);
+    .filter((c): c is TextClip => c.type === "text" && c.text.trim().length > 0 && !textPreset(c.preset));
   texts.forEach((t, i) => {
     const file = joinPath(opts.tempDir, `clipmaster_text_${i}.txt`);
     files.push({ path: file, content: t.text });
@@ -184,6 +185,20 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
     filters.push(`[${last}]drawtext=${opt.join(":")}[t${i}]`);
     last = `t${i}`;
   });
+  // Animated text / lower-third templates (ASS via libass).
+  const presetTexts = p.tracks
+    .filter((t) => t.kind === "text" && !t.hidden)
+    .flatMap((t) => clipsOnTrack(p, t.id))
+    .filter((c): c is TextClip => c.type === "text");
+  const textAss = buildTextAss(presetTexts, W, H, p.settings.height);
+  if (textAss) {
+    const file = joinPath(opts.tempDir, "clipmaster_text.ass");
+    files.push({ path: file, content: textAss });
+    const fonts = opts.fontsDir ? `:fontsdir='${escapeFilterValue(opts.fontsDir)}'` : "";
+    filters.push(`[${last}]ass=filename='${escapeFilterValue(file)}'${fonts}[txt]`);
+    last = "txt";
+  }
+
   // Captions (ASS via libass).
   if (p.captions?.length) {
     const file = joinPath(opts.tempDir, "clipmaster_captions.ass");
