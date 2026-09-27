@@ -6,6 +6,11 @@ import { updateClip } from "../core/project";
 import { addAssetToTimeline, autoCaptions, errorText, exportSrt, importMedia, importSrt, notify } from "../lib/actions";
 import { captionCss } from "../lib/captionStyle";
 import { useEditor } from "../store";
+import previewImage from "../assets/preview.jpg";
+
+// Effect thumbnails pre-rendered with the real export filters (npm run previews).
+const FX_THUMBS = import.meta.glob("../assets/fx/*.jpg", { eager: true, import: "default" }) as Record<string, string>;
+const fxThumb = (id: string) => FX_THUMBS[`../assets/fx/${id}.jpg`] ?? previewImage;
 import { formatTime } from "./Preview";
 
 type Tab = "media" | "effects" | "transitions" | "captions";
@@ -72,13 +77,7 @@ function useSelectedMedia(): MediaClip | undefined {
 }
 
 const CATEGORY_LABEL: Record<EffectCategory, string> = { color: "Color & grading", stylize: "Stylize", motion: "Motion" };
-const SWATCH: Record<string, string> = {
-  brighten: "brightness(1.4)", contrast: "contrast(1.6)", saturate: "saturate(2)", vivid: "saturate(1.6) contrast(1.15)",
-  warm: "sepia(.35) saturate(1.3)", cool: "hue-rotate(-20deg)", cinematic: "contrast(1.2) saturate(1.2) hue-rotate(-8deg)",
-  vintage: "sepia(.5) contrast(.9)", cross: "hue-rotate(25deg) saturate(1.5)", matte: "contrast(.75) brightness(1.1)",
-  bw: "grayscale(1)", noir: "grayscale(1) contrast(1.8)", sepia: "sepia(1)", hue: "hue-rotate(160deg)", blur: "blur(3px)",
-  negative: "invert(1)", sketch: "grayscale(1) contrast(3)", film: "sepia(.6) contrast(1.1)",
-};
+
 
 function EffectsTab() {
   const clip = useSelectedMedia();
@@ -116,7 +115,7 @@ function EffectsTab() {
                 }}
                 title={`${e.name}\nRight-click: apply to all clips`}
               >
-                <div className="thumb"><div className="fx-swatch" style={{ filter: SWATCH[e.id] }} /></div>
+                <div className="thumb"><img src={fxThumb(e.id)} alt="" loading="lazy" draggable={false} /></div>
                 <div className="label">{e.name}</div>
               </button>
             ))}
@@ -145,8 +144,9 @@ function TransitionsTab() {
           <div className="grid">
             {TRANSITIONS.filter((t) => t.side === side).map((t) => (
               <button key={t.id} className={`card ${(side === "in" ? clip?.transIn : clip?.transOut)?.id === t.id ? "active" : ""}`} onClick={() => set(t.id, side)}>
-                <div className="thumb" style={{ background: "linear-gradient(90deg,#1e3a8a 50%,#7c3aed 50%)" }}>
-                  <span style={{ fontSize: 18 }}>{side === "in" ? "⇥" : "⇤"}</span>
+                <div className="thumb tr-thumb" title="Hover to preview">
+                  <img className="tr-from" src={fxThumb("bw")} alt="" draggable={false} />
+                  <img className={`tr-to tr-${t.id}`} src={previewImage} alt="" draggable={false} />
                 </div>
                 <div className="label">{t.name}</div>
               </button>
