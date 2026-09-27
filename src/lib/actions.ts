@@ -1,4 +1,5 @@
 import { applyAutoEdit, AutoEditOptions, mainTrackId, parseSilenceDetect, Range } from "../core/autoedit";
+import { applyAutoZoom } from "../core/autozoom";
 import { beatSyncMontage, detectBeats, findMusicClip, MontageOptions } from "../core/beats";
 import { parseSrt, toSrt } from "../core/captions";
 import {
@@ -271,6 +272,7 @@ export async function runAutoEdit(
     try {
       const n = await autoCaptions(onProgress);
       msg += ` Added ${n} caption words.`;
+      if (opts.autoZoom) msg += ` ${autoZoom()}`;
     } catch (e) {
       msg += ` Captions skipped: ${errorText(e)}`;
     }
@@ -298,4 +300,15 @@ export async function runBeatSync(opts: MontageOptions, onProgress: (msg: string
   if (!r.cuts) throw new Error("Add some video clips or photos to the video track first.");
   S().commit(() => r.project);
   return `Detected ${bpm} BPM · made ${r.cuts + 1} shots cut on the beat.`;
+}
+
+// ---------- auto zoom ----------
+
+export function autoZoom(): string {
+  const { project } = S();
+  if (!project.captions.length) throw new Error("Add captions first (✨ Auto captions or Import SRT). Auto zoom uses the word timings.");
+  const r = applyAutoZoom(project);
+  if (!r.zooms) return "No clear emphasis moments found (or clips already have hand-made keyframes).";
+  S().commit(() => r.project);
+  return `Added ${r.zooms} zooms on key moments.`;
 }

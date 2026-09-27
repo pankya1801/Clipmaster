@@ -3,7 +3,7 @@ import { CAPTION_TEMPLATES } from "../core/captions";
 import { EFFECTS, EffectCategory, TRANSITIONS } from "../core/effects";
 import type { MediaClip } from "../core/types";
 import { updateClip } from "../core/project";
-import { addAssetToTimeline, autoCaptions, errorText, exportSrt, importMedia, importSrt, notify } from "../lib/actions";
+import { addAssetToTimeline, autoCaptions, autoZoom, errorText, exportSrt, importMedia, importSrt, notify } from "../lib/actions";
 import { captionCss } from "../lib/captionStyle";
 import { useEditor } from "../store";
 import previewImage from "../assets/preview.jpg";
@@ -190,6 +190,19 @@ function CaptionsTab() {
         <button className="grow" onClick={exportSrt} disabled={!captions.length}>Export SRT</button>
         <button onClick={() => commit((p) => ({ ...p, captions: [] }))} disabled={!captions.length}>Clear</button>
       </div>
+      <button
+        disabled={!captions.length}
+        title="Punch-in and push-in zooms on sentence starts, exclamations and key words"
+        onClick={() => {
+          try {
+            notify(autoZoom());
+          } catch (e) {
+            notify(errorText(e));
+          }
+        }}
+      >
+        🎯 Auto zoom on key words
+      </button>
       <div className="section-title">Style · {CAPTION_TEMPLATES.length} templates</div>
       <div className="grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
         {CAPTION_TEMPLATES.map((t) => {

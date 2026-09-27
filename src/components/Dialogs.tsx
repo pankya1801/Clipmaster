@@ -150,6 +150,7 @@ export function AutoEditDialog({ onClose }: { onClose: () => void }) {
             <input type="range" min={0.2} max={2} step={0.05} value={opts.minSilence} onChange={(e) => set({ minSilence: +e.target.value })} /></label>
         </div>
       )}
+      <label className="check"><input type="checkbox" checked={opts.autoZoom} disabled={!opts.captions} onChange={(e) => set({ autoZoom: e.target.checked })} /> Auto zoom on key words (uses captions)</label>
       <label className="check"><input type="checkbox" checked={opts.duck} onChange={(e) => set({ duck: e.target.checked })} /> Duck background music under speech</label>
       <label className="check"><input type="checkbox" checked={opts.punchIn} onChange={(e) => set({ punchIn: e.target.checked })} /> Punch-in zoom on every other cut</label>
       <label className="check"><input type="checkbox" checked={opts.captions} onChange={(e) => set({ captions: e.target.checked })} /> Auto captions (download a model once in Settings)</label>
