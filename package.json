@@ -1,7 +1,7 @@
 {
   "name": "clipmaster",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Free, open-source desktop video editor — an alternative to CapCut and Filmora.",
   "license": "MIT",
   "type": "module",
