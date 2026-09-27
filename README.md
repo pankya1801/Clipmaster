@@ -2,13 +2,14 @@
 
 <h1 align="center">Clipmaster</h1>
 
-<p align="center"><b>The free, open-source video editor for creators.</b><br>
+<p align="center"><b>The free, open-source video editor for creators: a CapCut and Filmora alternative for Windows, macOS and Linux.</b><br>
 Captions, effects, auto-edit and 4K export: no subscription, no watermark, no account, no cloud.</p>
 
 <p align="center">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8b5cf6"></a>
   <img alt="Windows, macOS, Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-3b82f6">
   <img alt="Offline" src="https://img.shields.io/badge/works-offline-10b981">
+  <a href="https://pankya1801.github.io/Clipmaster/"><img alt="Website" src="https://img.shields.io/badge/website-clipmaster-8b5cf6"></a>
   <a href="../../releases"><img alt="Download" src="https://img.shields.io/badge/download-latest-f59e0b"></a>
 </p>
 
