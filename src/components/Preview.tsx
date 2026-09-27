@@ -3,7 +3,8 @@ import { captionTemplate, groupCaptionLines } from "../core/captions";
 import { effectsCss, transitionPreview } from "../core/effects";
 import { fittedSize } from "../core/ffmpeg";
 import { clipDuration, clipEnd, clipsOnTrack, IDENTITY_TRANSFORM, projectDuration, textsAt, transformAt, transformPatch, updateClip } from "../core/project";
-import type { MediaClip, Project } from "../core/types";
+import type { MediaClip, Project, TextClip } from "../core/types";
+import { presetPreview, textPreset } from "../core/textPresets";
 import { mediaUrl } from "../lib/backend";
 import { captionCss } from "../lib/captionStyle";
 import { useEditor } from "../store";
@@ -132,7 +133,9 @@ export function Preview() {
         el.preload = "auto";
         audioPool.current.set(c.id, el);
       }
-      syncMedia(el, c, playhead, playing, gainAt(c, playhead));
+      // Preview approximation of auto-ducking: quieter music while a clip with sound plays.
+      const duck = project.settings.autoDuck && layers.some((l) => project.assets[l.assetId]?.hasAudio) ? 0.3 : 1;
+      syncMedia(el, c, playhead, playing, gainAt(c, playhead) * duck);
     }
     for (const [id, el] of audioPool.current) {
       if (!live.has(id)) {
@@ -222,23 +225,27 @@ export function Preview() {
               />
             );
           })}
-          {texts.map((t) => (
-            <div
-              key={t.id}
-              className="text-layer"
-              style={{
-                left: `${t.x * 100}%`,
-                top: `${t.y * 100}%`,
-                fontSize: t.fontSize * scale,
-                color: t.color,
-                background: t.box ? "rgba(0,0,0,.55)" : undefined,
-                padding: t.box ? `${4 * scale * 3}px ${6 * scale * 3}px` : undefined,
-                textShadow: t.box ? undefined : "0 0 3px #000, 0 0 3px #000",
-              }}
-            >
-              {t.text}
-            </div>
-          ))}
+          {texts.map((t) =>
+            textPreset(t.preset) ? (
+              <PresetText key={t.id} clip={t} local={playhead - t.start} scale={scale} />
+            ) : (
+              <div
+                key={t.id}
+                className="text-layer"
+                style={{
+                  left: `${t.x * 100}%`,
+                  top: `${t.y * 100}%`,
+                  fontSize: t.fontSize * scale,
+                  color: t.color,
+                  background: t.box ? "rgba(0,0,0,.55)" : undefined,
+                  padding: t.box ? `${4 * scale * 3}px ${6 * scale * 3}px` : undefined,
+                  textShadow: t.box ? undefined : "0 0 3px #000, 0 0 3px #000",
+                }}
+              >
+                {t.text}
+              </div>
+            )
+          )}
           <CaptionOverlay lines={captionLines} t={playhead} scale={scale} />
           {!layers.length && !texts.length && (
             <div className="empty-state" style={{ position: "absolute", inset: 0 }}>
@@ -288,6 +295,54 @@ function CaptionOverlay({ lines, t, scale }: { lines: ReturnType<typeof groupCap
           );
         })}
       </span>
+    </div>
+  );
+}
+
+/** Live-preview approximation of an animated text template (export uses libass). */
+function PresetText({ clip, local, scale }: { clip: TextClip; local: number; scale: number }) {
+  const p = textPreset(clip.preset)!;
+  const anim = presetPreview(p, local, clip.duration);
+  const text = p.uppercase ? clip.text.toUpperCase() : clip.text;
+  const [title, ...rest] = text.split("\n");
+  const sub = rest.join(" ");
+  const fs = clip.fontSize * scale;
+  const accent = clip.accent ?? p.accent;
+  const shown = anim.reveal != null ? title.slice(0, Math.ceil(title.length * anim.reveal)) : title;
+  const look: React.CSSProperties =
+    p.look === "box"
+      ? { background: accent, padding: `${fs * 0.25}px ${fs * 0.45}px`, borderRadius: fs * 0.12 }
+      : p.look === "banner"
+        ? { background: accent, padding: `${fs * 0.2}px ${fs * 0.4}px`, minWidth: "88%" }
+        : p.look === "bar"
+          ? { borderLeft: `${fs * 0.22}px solid ${accent}`, paddingLeft: fs * 0.35 }
+          : p.look === "glow"
+            ? { textShadow: `0 0 ${fs * 0.15}px ${accent}, 0 0 ${fs * 0.3}px ${accent}` }
+            : p.look === "plain"
+              ? { textShadow: "0 2px 6px #000a" }
+              : { WebkitTextStroke: `${fs * 0.06}px #000`, paintOrder: "stroke fill" };
+  return (
+    <div
+      className="text-layer"
+      style={{
+        left: `${clip.x * 100}%`,
+        top: `${clip.y * 100}%`,
+        transform: `${p.align === "left" ? "translate(0,0)" : "translate(-50%,-50%)"} ${anim.transform}`,
+        transformOrigin: p.align === "left" ? "left center" : "center",
+        opacity: anim.opacity,
+        filter: anim.filter,
+        textAlign: p.align,
+        fontFamily: `"${p.font}", "Poppins", sans-serif`,
+        fontWeight: p.bold || p.font.includes("Bold") ? 800 : 400,
+        fontStyle: p.italic ? "italic" : "normal",
+        fontSize: fs,
+        color: clip.color,
+        lineHeight: 1.15,
+        ...look,
+      }}
+    >
+      {shown}
+      {sub && <div style={{ fontSize: fs * 0.7, fontWeight: 500 }}>{sub}</div>}
     </div>
   );
 }

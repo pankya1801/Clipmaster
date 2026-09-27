@@ -123,7 +123,7 @@ export function assColor(hex: string, alpha = 0): string {
   return `&H${hx(a)}${h.slice(4, 6)}${h.slice(2, 4)}${h.slice(0, 2)}`.toUpperCase();
 }
 
-function assTime(t: number): string {
+export function assTime(t: number): string {
   const cs = Math.max(0, Math.round(t * 100));
   const h = Math.floor(cs / 360000);
   const m = Math.floor((cs % 360000) / 6000);
@@ -131,7 +131,7 @@ function assTime(t: number): string {
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(cs % 100).padStart(2, "0")}`;
 }
 
-function escapeAss(text: string) {
+export function escapeAss(text: string) {
   return text.replace(/\\/g, "\\\\").replace(/\{/g, "(").replace(/\}/g, ")").replace(/\n/g, "\\N");
 }
 

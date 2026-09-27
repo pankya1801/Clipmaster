@@ -1,4 +1,5 @@
 import { applyAutoEdit, AutoEditOptions, mainTrackId, parseSilenceDetect, Range } from "../core/autoedit";
+import { applyAutoZoom } from "../core/autozoom";
 import { beatSyncMontage, detectBeats, findMusicClip, MontageOptions } from "../core/beats";
 import { parseSrt, toSrt } from "../core/captions";
 import {
@@ -45,7 +46,7 @@ export function addAssetToTimeline(assetId: string, trackId?: string, at?: numbe
   }
 }
 
-export function addTextAtPlayhead(text?: string) {
+export function addTextAtPlayhead(text?: string, presetId?: string) {
   const { project, playhead } = S();
   let p = project;
   let track = p.tracks.find((t) => t.kind === "text");
@@ -53,7 +54,7 @@ export function addTextAtPlayhead(text?: string) {
     p = addTrack(p, "text");
     track = p.tracks.find((t) => t.kind === "text")!;
   }
-  const r = addText(p, track.id, playhead, text);
+  const r = addText(p, track.id, playhead, text, presetId);
   if (r.clipId) {
     S().commit(() => r.project);
     S().select([r.clipId]);
@@ -246,7 +247,7 @@ function pickTextFile(accept: string): Promise<string | null> {
 // ---------- auto edit ----------
 
 export async function runAutoEdit(
-  opts: AutoEditOptions & { captions: boolean; noiseDb: number; minSilence: number },
+  opts: AutoEditOptions & { captions: boolean; noiseDb: number; minSilence: number; duck?: boolean; autoZoom?: boolean },
   onProgress: (msg: string) => void
 ): Promise<string> {
   const { project } = S();
@@ -265,12 +266,13 @@ export async function runAutoEdit(
     }
   }
   const r = applyAutoEdit(project, silences, opts);
-  S().commit(() => r.project);
+  S().commit(() => (opts.duck ? { ...r.project, settings: { ...r.project.settings, autoDuck: true } } : r.project));
   let msg = `Removed ${r.removedSeconds.toFixed(1)}s of silence with ${r.cuts} cuts.`;
   if (opts.captions) {
     try {
       const n = await autoCaptions(onProgress);
       msg += ` Added ${n} caption words.`;
+      if (opts.autoZoom) msg += ` ${autoZoom()}`;
     } catch (e) {
       msg += ` Captions skipped: ${errorText(e)}`;
     }
@@ -298,4 +300,15 @@ export async function runBeatSync(opts: MontageOptions, onProgress: (msg: string
   if (!r.cuts) throw new Error("Add some video clips or photos to the video track first.");
   S().commit(() => r.project);
   return `Detected ${bpm} BPM · made ${r.cuts + 1} shots cut on the beat.`;
+}
+
+// ---------- auto zoom ----------
+
+export function autoZoom(): string {
+  const { project } = S();
+  if (!project.captions.length) throw new Error("Add captions first (✨ Auto captions or Import SRT). Auto zoom uses the word timings.");
+  const r = applyAutoZoom(project);
+  if (!r.zooms) return "No clear emphasis moments found (or clips already have hand-made keyframes).";
+  S().commit(() => r.project);
+  return `Added ${r.zooms} zooms on key moments.`;
 }
