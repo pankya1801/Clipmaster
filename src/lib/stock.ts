@@ -94,6 +94,13 @@ export async function autoStockBroll(onProgress: (msg: string) => void, opts: { 
   const orientation = orientationOf(project.settings.width, project.settings.height);
   const cues = brollCues(project.captions, { every: opts.every ?? 8, length: opts.length ?? 3, max: opts.max ?? 8 });
   if (!cues.length) throw new Error("Couldn't find good moments for B-roll.");
+  // With an AI key, ask for visual search phrases ("aerial snowy mountains").
+  const { hasLlm, refineBrollQueries } = await import("./ai");
+  if (hasLlm()) {
+    onProgress("Choosing B-roll shots…");
+    const refined = await refineBrollQueries(cues);
+    refined.forEach((q, i) => (cues[i] = { ...cues[i], query: q }));
+  }
   const used = new Set<string>();
   let added = 0;
   for (const [i, cue] of cues.entries()) {
@@ -103,7 +110,8 @@ export async function autoStockBroll(onProgress: (msg: string) => void, opts: { 
       const query = async (q: string) => (await searchStock(prov, "video", q, 1, orientation === "square" ? undefined : orientation).catch(() => [] as StockItem[]))
         .filter((x) => !used.has(x.pageUrl) && x.duration >= cue.end - cue.start);
       let found = await query(cue.query);
-      if (!found.length && cue.query.includes(" ")) found = await query(cue.query.split(" ")[0]);
+      if (!found.length && cue.query.includes(" ")) found = await query(cue.query.split(" ").slice(-2).join(" "));
+      if (!found.length && cue.query.includes(" ")) found = await query(cue.query.split(" ").pop()!);
       item = found[0];
       if (item) break;
     }

@@ -135,8 +135,16 @@ export function escapeAss(text: string) {
   return text.replace(/\\/g, "\\\\").replace(/\{/g, "(").replace(/\}/g, ")").replace(/\n/g, "\\N");
 }
 
-export function buildAss(words: CaptionWord[], settings: CaptionSettings, W: number, H: number): string {
+/** The caption template with the project's brand overrides applied. */
+export function styledTemplate(settings: CaptionSettings): CaptionTemplate {
   const t = captionTemplate(settings.templateId);
+  const b = settings.brand;
+  if (!b) return t;
+  return { ...t, ...(b.font ? { font: b.font } : {}), ...(b.color ? { color: b.color } : {}), ...(b.highlight ? { highlight: b.highlight } : {}) };
+}
+
+export function buildAss(words: CaptionWord[], settings: CaptionSettings, W: number, H: number): string {
+  const t = styledTemplate(settings);
   const size = Math.round(t.size * H * settings.scale);
   const outline = t.box ? Math.max(4, Math.round(size * t.outlineWidth)) : Math.round(size * t.outlineWidth);
   const align = t.position === "top" ? 8 : t.position === "center" ? 5 : 2;

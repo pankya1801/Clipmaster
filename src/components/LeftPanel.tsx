@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AiTab } from "./AiPanel";
 import { CAPTION_TEMPLATES } from "../core/captions";
 import { EFFECTS, EffectCategory, TRANSITIONS } from "../core/effects";
 import { TEXT_PRESETS } from "../core/textPresets";
@@ -21,16 +22,16 @@ const FX_THUMBS = import.meta.glob("../assets/fx/*.jpg", { eager: true, import: 
 const fxThumb = (id: string) => FX_THUMBS[`../assets/fx/${id}.jpg`] ?? previewImage;
 import { formatTime } from "./Preview";
 
-type Tab = "media" | "stock" | "audio" | "text" | "elements" | "effects" | "transitions" | "captions";
+type Tab = "media" | "stock" | "ai" | "audio" | "text" | "elements" | "effects" | "transitions" | "captions";
 
 export function LeftPanel() {
   const [tab, setTab] = useState<Tab>("media");
   return (
     <div className="panel">
       <div className="tabs">
-        {(["media", "stock", "audio", "text", "elements", "effects", "transitions", "captions"] as Tab[]).map((t) => (
+        {(["media", "stock", "ai", "audio", "text", "elements", "effects", "transitions", "captions"] as Tab[]).map((t) => (
           <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-            {t[0].toUpperCase() + t.slice(1)}
+            {t === "ai" ? "AI" : t[0].toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
@@ -38,6 +39,7 @@ export function LeftPanel() {
         {tab === "media" && <MediaTab />}
         {tab === "audio" && <AudioTab />}
         {tab === "stock" && <StockTab />}
+        {tab === "ai" && <AiTab />}
         {tab === "text" && <TextTab />}
         {tab === "elements" && <ElementsTab />}
         {tab === "effects" && <EffectsTab />}

@@ -23,6 +23,8 @@ export interface ExportOptions {
   fontsDir?: string;
   /** Normalise loudness to -14 LUFS (YouTube / TikTok / Instagram target). */
   normalizeLoudness?: boolean;
+  /** RNNoise model file for clips with Studio voice. */
+  voiceModel?: string;
   /** Container / codec. GIF has no sound and runs at up to 15 fps. */
   format?: ExportFormat;
   /** Override output size (defaults to project settings). */
@@ -155,8 +157,20 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
         filters.push(`[bsr${vi}][bmk${vi}]alphamerge[ba${vi}]`);
         src = `ba${vi}`;
       }
+      if (c.faceMask && !gen && !isImage) {
+        const mi = addInput(c.faceMask.path, false, 0);
+        filters.push(`[${src}]split[fo${vi}][fb${vi}]`);
+        filters.push(`[fb${vi}]boxblur=lr='min(w\\,h)/24':lp=3,format=yuva420p[fbb${vi}]`);
+        filters.push(`[${mi}:v]setpts=PTS-STARTPTS+${n(c.faceMask.start)}/TB,format=gray[fm${vi}]`);
+        filters.push(`[fm${vi}][fbb${vi}]scale2ref[fmk${vi}][fbr${vi}]`);
+        filters.push(`[fbr${vi}][fmk${vi}]alphamerge[fba${vi}]`);
+        filters.push(`[fo${vi}][fba${vi}]overlay=eof_action=pass:format=auto[fx${vi}]`);
+        src = `fx${vi}`;
+      }
       const head = [
         ...timingFilters(c, isImage, shown, tail),
+        ...(c.smoothSlow && !isImage && !c.freeze && (c.speed < 0.99 || c.ramp?.length) ? [`minterpolate=fps=${fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1`] : []),
+        ...(c.enhance && !gen ? ["hqdn3d=1.5:1.5:6:6", "unsharp=5:5:0.8:5:5:0"] : []),
         ...(c.chroma ? ["format=yuva420p", chromaFilter(c.chroma)] : []),
       ];
       filters.push(`[${src}]${head.join(",")}[h${vi}]`);
@@ -256,7 +270,7 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
       "asetpts=PTS-STARTPTS",
       c.reverse ? "areverse" : "",
       ...atempoChain(c.speed),
-      ...(c.denoise ? VOICE_CLEANUP : []),
+      ...(c.studioVoice && opts.voiceModel ? ["highpass=f=70", `arnndn=m='${escapeFilterValue(opts.voiceModel)}'`, "dynaudnorm=f=150:g=15"] : c.denoise || c.studioVoice ? VOICE_CLEANUP : []),
       `volume=${n(c.volume)}`,
       c.fadeIn > 0 ? `afade=t=in:st=0:d=${n(c.fadeIn)}` : "",
       c.fadeOut > 0 ? `afade=t=out:st=${n(Math.max(0, dur - c.fadeOut))}:d=${n(c.fadeOut)}` : "",
@@ -283,6 +297,7 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
     filters.push(`anullsrc=r=48000:cl=stereo[aout]`);
   }
 
+  if (Object.values(p.clips).some((c) => c.type === "media" && c.enhance)) filters[0] = `sws_flags=lanczos+accurate_rnd;${filters[0]}`;
   const q = QUALITY[opts.quality];
   const fmt = opts.format ?? "mp4";
   if (fmt === "gif") {

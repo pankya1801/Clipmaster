@@ -55,6 +55,14 @@ export interface MediaClip extends ClipBase {
   keyframes?: Keyframe[];
   /** Voice clean-up on this clip's audio. */
   denoise?: boolean;
+  /** Neural speech denoise (RNNoise) — stronger than `denoise`. */
+  studioVoice?: boolean;
+  /** Denoise + sharpen the picture (and high-quality scaling). */
+  enhance?: boolean;
+  /** Motion-interpolated frames for smooth slow motion (speed < 1 or ramps). */
+  smoothSlow?: boolean;
+  /** Face blur mask (white = blur), source-timed like `bgMask`. */
+  faceMask?: { path: string; start: number; fps: number };
   /** How the clip fills a differently shaped canvas. Undefined = project default. */
   fit?: FitMode;
   /** Where to centre the crop over time (Smart reframe), in source seconds. */
@@ -149,6 +157,8 @@ export interface CaptionSettings {
   y?: number;
   /** Max words shown at once (overrides template). */
   maxWords?: number;
+  /** Brand kit overrides for the template's look. */
+  brand?: { font?: string; color?: string; highlight?: string };
 }
 
 export interface Project {

@@ -11,6 +11,7 @@ import { useEditor } from "../store";
 import { formatTime } from "./Preview";
 import { SHORTCUTS } from "./shortcuts";
 import { RAMP_PRESETS } from "../core/speed";
+import { blurFaces } from "../lib/faces";
 import { freezeFrame, importLut, removeBackground, setRamp, toggleReverse, trackSelected } from "../lib/pro";
 
 function Num({ label, value, min, max, step = 0.1, suffix = "", onChange }: {
@@ -58,6 +59,9 @@ function MediaInspector({ clip }: { clip: MediaClip }) {
           <Num label="Audio fade out" value={clip.fadeOut} min={0} max={Math.min(5, dur)} suffix="s" onChange={(fadeOut) => set({ fadeOut })} />
           <label className="check" title="Removes background hiss and hum, cuts rumble and evens out volume. Applied on export.">
             <input type="checkbox" checked={!!clip.denoise} onChange={(e) => set({ denoise: e.target.checked || undefined })} /> 🎙 Clean up voice (noise reduction)
+          </label>
+          <label className="check" title="Neural speech noise removal (RNNoise, runs offline). Removes fans, traffic and room noise. Applied on export; the ~300 KB model downloads once.">
+            <input type="checkbox" checked={!!clip.studioVoice} onChange={(e) => set({ studioVoice: e.target.checked || undefined })} /> 🎧 Studio voice (AI noise removal)
           </label>
         </>
       )}
@@ -364,6 +368,7 @@ function useRunner() {
 
 function TimeControls({ clip }: { clip: MediaClip }) {
   const { busy, run } = useRunner();
+  const { commit } = useEditor.getState();
   const ramp = clip.ramp ? RAMP_PRESETS.find((r) => JSON.stringify(r.points) === JSON.stringify(clip.ramp)) : undefined;
   return (
     <div className="fx-item">
@@ -379,6 +384,11 @@ function TimeControls({ clip }: { clip: MediaClip }) {
         <button className="small" disabled={!!clip.freeze} onClick={() => run("", () => freezeFrame(2))} title="Hold the frame under the playhead for 2 seconds">❄ Freeze frame</button>
         {busy && <span className="small muted">{busy}</span>}
       </div>
+      {(clip.speed < 0.99 || !!clip.ramp) && (
+        <label className="check" title="Creates in-between frames with motion interpolation so slow motion looks smooth instead of choppy. Slower to export.">
+          <input type="checkbox" checked={!!clip.smoothSlow} onChange={(e) => commit((p) => updateClip(p, clip.id, { smoothSlow: e.target.checked || undefined }))} /> 🌊 Smooth slow motion (frame interpolation)
+        </label>
+      )}
       {clip.freeze && <p className="small muted" style={{ margin: 0 }}>Freeze frame — holds one picture.</p>}
     </div>
   );
@@ -397,6 +407,12 @@ function LookControls({ clip }: { clip: MediaClip }) {
         </button>
         <button disabled={!!busy} className={clip.stabilize ? "small primary" : "small"} onClick={() => set({ stabilize: !clip.stabilize || undefined })} title="Smooth out shaky footage (crops the edges slightly). Applied on export.">
           🤚 Stabilize
+        </button>
+        <button disabled={!!busy} className={clip.enhance ? "small primary" : "small"} onClick={() => set({ enhance: !clip.enhance || undefined })} title="Clean up noise and sharpen; upscales with high-quality (Lanczos) scaling. Applied on export.">
+          ✨ Enhance
+        </button>
+        <button disabled={!!busy} className={clip.faceMask ? "small primary" : "small"} onClick={() => (clip.faceMask ? set({ faceMask: undefined }) : run("Finding faces…", blurFaces))} title="Find every face and blur it, for privacy. Runs offline on your computer.">
+          {clip.faceMask ? "🙈 Faces blurred (undo)" : "🙈 Blur faces"}
         </button>
       </div>
       <label className="check">

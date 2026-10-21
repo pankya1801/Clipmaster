@@ -49,14 +49,14 @@ button.primary:hover:not(:disabled) { background: var(--accent-2); }
 button.ghost { background: transparent; border-color: transparent; }
 button.ghost:hover:not(:disabled) { background: var(--panel-2); border-color: var(--line); }
 button.icon { padding: 4px 7px; min-width: 28px; }
-input[type="number"], input[type="text"], select, textarea {
+input[type="number"], input[type="text"], input[type="password"], input:not([type]), select, textarea {
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 4px 7px;
   width: 100%;
 }
-textarea { resize: vertical; user-select: text; }
+textarea { resize: vertical; user-select: text; min-height: 58px; flex-shrink: 0; }
 input[type="range"] { width: 100%; accent-color: var(--accent); }
 input[type="color"] { width: 36px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; }
 label.field { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
@@ -76,8 +76,8 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; }
 .main { display: grid; grid-template-columns: 330px 1fr 290px; min-height: 0; }
 .panel { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
 .panel.right { border-right: 0; border-left: 1px solid var(--line); }
-.tabs { display: flex; border-bottom: 1px solid var(--line); overflow-x: auto; }
-.tabs button { border: 0; border-radius: 0; background: none; padding: 9px 10px; color: var(--muted); border-bottom: 2px solid transparent; }
+.tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+.tabs button { border: 0; border-radius: 0; background: none; padding: 7px 8px; color: var(--muted); border-bottom: 2px solid transparent; }
 .tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
 .panel-body { padding: 10px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; }
 .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 4px 0 2px; }

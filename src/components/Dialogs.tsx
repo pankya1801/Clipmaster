@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { DEFAULT_AUTO_EDIT } from "../core/autoedit";
 import { EFFECTS } from "../core/effects";
 import { loadStockKeys, saveStockKeys } from "../lib/stock";
+import { loadAiKeys, saveAiKeys } from "../lib/ai";
 import { buildExportPlan, ExportFormat, ExportQuality } from "../core/ffmpeg";
 import { projectDuration } from "../core/project";
 import { AUTO_EDIT_PRESETS } from "../core/smartcut";
@@ -10,7 +11,7 @@ import { invoke, isTauri, saveDialog } from "../lib/backend";
 import { useEditor } from "../store";
 import { SHORTCUTS } from "./shortcuts";
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="modal-back" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
@@ -83,7 +84,9 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
       setProgress(0);
       const [tempDir, fontsDir] = await Promise.all([invoke<string>("temp_dir"), invoke<string | null>("fonts_dir")]);
       const fontFile = fontsDir ? `${fontsDir}/Montserrat-ExtraBold.ttf` : undefined;
-      const plan = buildExportPlan(project, { outputPath: out, tempDir, quality, fontsDir: fontsDir ?? undefined, fontFile, normalizeLoudness: loudness, format, ...size });
+      const needsVoiceModel = Object.values(project.clips).some((c) => c.type === "media" && c.studioVoice);
+      const voiceModel = needsVoiceModel ? await invoke<string>("voice_model").catch(() => undefined) : undefined;
+      const plan = buildExportPlan(project, { outputPath: out, tempDir, quality, fontsDir: fontsDir ?? undefined, fontFile, normalizeLoudness: loudness, format, voiceModel, ...size });
       await invoke("export_video", { args: plan.args, files: plan.files });
       setProgress(1);
       setStatus(`Saved to ${out}`);
@@ -262,6 +265,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [advanced, setAdvanced] = useState(!!(cfg.bin || cfg.model));
   const [stock, setStock] = useState(loadStockKeys());
+  const [ai, setAi] = useState(loadAiKeys());
 
   const refresh = () => isTauri && invoke<WhisperModel[]>("whisper_models").then(setModels).catch(() => {});
   useEffect(() => {
@@ -300,6 +304,21 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Settings" onClose={onClose}>
       <div><b>FFmpeg</b><div className="muted small" style={{ userSelect: "text" }}>{ffmpeg}</div></div>
+      <div className="section-title">AI (bring your own keys)</div>
+      <p className="muted small" style={{ margin: 0 }}>Optional. Keys stay on this computer and are only sent to that provider. You pay the provider directly.</p>
+      {([
+        ["openai", "OpenAI", "Text, images and voices"],
+        ["anthropic", "Anthropic (Claude)", "Text: clip finder, titles, translation"],
+        ["openrouter", "OpenRouter", "Text via any model"],
+        ["fal", "fal.ai", "Images (FLUX)"],
+        ["elevenlabs", "ElevenLabs", "Voices and dubbing"],
+      ] as const).map(([k, label, hint]) => (
+        <label key={k} className="field"><span>{label} <b className="muted">{hint}</b></span><input type="password" value={ai[k]} onChange={(e) => setAi({ ...ai, [k]: e.target.value.trim() })} placeholder="Paste key" /></label>
+      ))}
+      <div className="row">
+        <label className="field grow"><span>Text model (optional)</span><input value={ai.llmModel ?? ""} onChange={(e) => setAi({ ...ai, llmModel: e.target.value.trim() || undefined })} placeholder="default" /></label>
+        <label className="field grow"><span>Image model (optional)</span><input value={ai.imageModel ?? ""} onChange={(e) => setAi({ ...ai, imageModel: e.target.value.trim() || undefined })} placeholder="default" /></label>
+      </div>
       <div className="section-title">Stock footage</div>
       <p className="muted small" style={{ margin: 0 }}>Free API keys: <span style={{ userSelect: "text" }}>pexels.com/api</span> and <span style={{ userSelect: "text" }}>pixabay.com/api/docs</span>. Keys stay on this computer.</p>
       <label className="field"><span>Pexels API key</span><input type="password" value={stock.pexels} onChange={(e) => setStock({ ...stock, pexels: e.target.value.trim() })} placeholder="Paste key" /></label>
@@ -341,7 +360,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         </>
       )}
       <div className="row"><span className="grow" /><button onClick={onClose}>Cancel</button>
-        <button className="primary" onClick={() => { saveWhisperConfig(cfg); saveStockKeys(stock); onClose(); }}>Save</button></div>
+        <button className="primary" onClick={() => { saveWhisperConfig(cfg); saveStockKeys(stock); saveAiKeys(ai); onClose(); }}>Save</button></div>
     </Modal>
   );
 }
