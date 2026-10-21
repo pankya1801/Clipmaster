@@ -252,6 +252,7 @@ pub async fn transcribe(
     whisper_bin: String,
     model: String,
     language: String,
+    prompt: Option<String>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let tmp = std::env::temp_dir();
@@ -274,6 +275,9 @@ pub async fn transcribe(
         let mut cmd = if whisper_bin.trim().is_empty() { command("whisper-cli") } else { Command::new(&whisper_bin) };
         cmd.args(["-m", &model, "-f"]).arg(&wav);
         cmd.args(["-osrt", "-ml", "1", "-sow", "-np", "-l", if language.is_empty() { "auto" } else { &language }]);
+        if let Some(p) = prompt.filter(|p| !p.trim().is_empty()) {
+            cmd.arg("--prompt").arg(p);
+        }
         cmd.arg("-of").arg(&base);
         let out = cmd.output().map_err(|e| format!("Could not run whisper ({e}). Check the path in Settings."));
         let _ = std::fs::remove_file(&wav);
