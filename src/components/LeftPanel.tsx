@@ -11,6 +11,8 @@ import { GENERATORS, INTROS, STICKERS } from "../core/visuals";
 import { stickerThumb } from "../lib/stickers";
 import previewImage from "../assets/preview.jpg";
 import { SOUNDS } from "../core/audiolib";
+import type { StockItem, StockKind, StockProvider } from "../core/stock";
+import { addStockAtPlayhead, autoStockBroll, hasStockKey, loadStockKeys, searchStock, stockCredits } from "../lib/stock";
 import type { ShareTemplate } from "../core/sharing";
 import { addMarkerAtPlayhead, addSound, clearMarkers, deleteWords, detectBeatMarkers, openTemplate, saveAsTemplate, textToSpeech, applyShareTemplate } from "../lib/pro";
 
@@ -19,14 +21,14 @@ const FX_THUMBS = import.meta.glob("../assets/fx/*.jpg", { eager: true, import: 
 const fxThumb = (id: string) => FX_THUMBS[`../assets/fx/${id}.jpg`] ?? previewImage;
 import { formatTime } from "./Preview";
 
-type Tab = "media" | "audio" | "text" | "elements" | "effects" | "transitions" | "captions";
+type Tab = "media" | "stock" | "audio" | "text" | "elements" | "effects" | "transitions" | "captions";
 
 export function LeftPanel() {
   const [tab, setTab] = useState<Tab>("media");
   return (
     <div className="panel">
       <div className="tabs">
-        {(["media", "audio", "text", "elements", "effects", "transitions", "captions"] as Tab[]).map((t) => (
+        {(["media", "stock", "audio", "text", "elements", "effects", "transitions", "captions"] as Tab[]).map((t) => (
           <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
             {t[0].toUpperCase() + t.slice(1)}
           </button>
@@ -35,6 +37,7 @@ export function LeftPanel() {
       <div className="panel-body" key={tab}>
         {tab === "media" && <MediaTab />}
         {tab === "audio" && <AudioTab />}
+        {tab === "stock" && <StockTab />}
         {tab === "text" && <TextTab />}
         {tab === "elements" && <ElementsTab />}
         {tab === "effects" && <EffectsTab />}
@@ -74,6 +77,7 @@ function MediaTab() {
           </div>
         ))}
       </div>
+      <CreditsButton />
       <TemplatesBox />
     </>
   );
@@ -94,6 +98,96 @@ function useRunner() {
     }
   };
   return { busy, run };
+}
+
+function CreditsButton() {
+  const project = useEditor((s) => s.project);
+  const credits = stockCredits(project);
+  if (!credits) return null;
+  return (
+    <button
+      className="small"
+      title={credits}
+      onClick={() => {
+        navigator.clipboard?.writeText(`Stock footage:\n${credits}`).then(() => notify("Stock credits copied — paste them in your video description."), () => notify(credits));
+      }}
+    >
+      📋 Copy stock credits
+    </button>
+  );
+}
+
+function StockTab() {
+  const keys = loadStockKeys();
+  const settings = useEditor((s) => s.project.settings);
+  const hasCaptions = useEditor((s) => s.project.captions.length > 0);
+  const [provider, setProvider] = useState<StockProvider>(keys.pexels || !keys.pixabay ? "pexels" : "pixabay");
+  const [kind, setKind] = useState<StockKind>("video");
+  const [match, setMatch] = useState(true);
+  const [query, setQuery] = useState("");
+  const [items, setItems] = useState<StockItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [hover, setHover] = useState<string | null>(null);
+  const { busy, run } = useRunner();
+  const orientation = settings.width > settings.height * 1.1 ? "landscape" : settings.height > settings.width * 1.1 ? "portrait" : "square";
+  const search = (p = 1) =>
+    run("Searching…", async () => {
+      const r = await searchStock(provider, kind, query, p, match && orientation !== "square" ? orientation : undefined);
+      setItems(p === 1 ? r : [...items, ...r]);
+      setPage(p);
+      return r.length ? "" : "Nothing found — try other words.";
+    });
+  if (!hasStockKey()) {
+    return (
+      <>
+        <p className="muted small">Search millions of free stock videos and photos from <b>Pexels</b> and <b>Pixabay</b>, right inside Clipmaster.</p>
+        <p className="small">1. Get a free API key at <span style={{ userSelect: "text" }}>pexels.com/api</span> or <span style={{ userSelect: "text" }}>pixabay.com/api/docs</span>.<br />2. Paste it in <b>Settings → Stock footage</b>.</p>
+      </>
+    );
+  }
+  return (
+    <>
+      <form className="row" onSubmit={(e) => { e.preventDefault(); search(1); }}>
+        <input className="grow" placeholder="Search stock (e.g. city night)" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <button className="primary" disabled={!!busy || !query.trim()}>Search</button>
+      </form>
+      <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
+        {(["video", "photo"] as StockKind[]).map((k) => <button key={k} type="button" className={kind === k ? "small primary" : "small"} onClick={() => setKind(k)}>{k === "video" ? "Videos" : "Photos"}</button>)}
+        <span style={{ width: 6 }} />
+        {(["pexels", "pixabay"] as StockProvider[]).filter((p) => keys[p]).map((p) => <button key={p} type="button" className={provider === p ? "small primary" : "small"} onClick={() => setProvider(p)}>{p === "pexels" ? "Pexels" : "Pixabay"}</button>)}
+      </div>
+      <label className="check"><input type="checkbox" checked={match} onChange={(e) => setMatch(e.target.checked)} /> Only {orientation} (matches the canvas)</label>
+      {busy && <p className="small muted">{busy}</p>}
+      <div className="grid stock-grid">
+        {items.map((it) => (
+          <button
+            key={`${it.provider}-${it.id}`}
+            className="card"
+            disabled={!!busy}
+            title={`${it.author} on ${it.provider === "pexels" ? "Pexels" : "Pixabay"} · ${it.width}×${it.height}\nClick to add at the playhead`}
+            onMouseEnter={() => setHover(it.id)}
+            onMouseLeave={() => setHover(null)}
+            onClick={() => run("Downloading…", () => addStockAtPlayhead(it))}
+          >
+            <div className="thumb" style={{ backgroundImage: `url(${it.thumb})` }}>
+              {it.kind === "video" && <span className="badge">{Math.round(it.duration)}s</span>}
+            </div>
+            <div className="label">{hover === it.id ? `+ Add · ${it.author}` : it.author}</div>
+          </button>
+        ))}
+      </div>
+      {items.length >= 20 && <button disabled={!!busy} onClick={() => search(page + 1)}>More results</button>}
+      <div className="section-title">Automatic</div>
+      <button
+        disabled={!!busy || !hasCaptions}
+        title={hasCaptions ? "Covers what you talk about with matching stock clips" : "Add captions first — B-roll follows what is said"}
+        onClick={() => run("Finding B-roll…", (progress) => autoStockBroll(progress))}
+      >
+        🎬 Auto stock B-roll from captions
+      </button>
+      <p className="muted small">Stock media is free to use under the Pexels / Pixabay licences. Credit is appreciated: use “Copy stock credits” in the Media tab.</p>
+    </>
+  );
 }
 
 function TemplatesBox() {

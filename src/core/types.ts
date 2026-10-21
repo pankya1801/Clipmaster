@@ -14,6 +14,8 @@ export interface MediaAsset {
   width?: number;
   height?: number;
   hasAudio: boolean;
+  /** Where stock media came from, for the credits list. */
+  credit?: { provider: string; author: string; pageUrl: string };
 }
 
 export type TrackKind = "video" | "audio" | "text";
