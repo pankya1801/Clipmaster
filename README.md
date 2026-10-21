@@ -31,6 +31,7 @@ Many popular editors keep auto-captions, effects or watermark-free export behind
 |---|---|
 | **Timeline editing** | Multi-track video, audio and text. Trim, split, move and snap clips, ripple delete, duplicate, and unlimited undo/redo. |
 | **Any format** | 16:9, 9:16 (Reels / Shorts / TikTok), 1:1, 4:5, 720p–4K, 24–60 fps. |
+| **📱 Smart reframe** | Landscape footage fills vertical videos: **Fill**, **Blurred background** or **Fit** per clip. Smart reframe tracks the speaker or action and keeps them in frame; **Make vertical** converts a whole project in one click. |
 | **25 caption templates** | Word-by-word highlight, karaoke, one-word pop, neon, boxed, typewriter and more. Captions are rendered with real outlines and animations. |
 | **Auto captions** | Runs [whisper.cpp](https://github.com/ggml-org/whisper.cpp) locally, so your audio never leaves your computer. One-click model download; you can also import or export SRT files. |
 | **Picture-in-picture** | Position, scale, rotation and opacity for any clip. Drag it in the preview, or use the corner presets. |
@@ -39,7 +40,9 @@ Many popular editors keep auto-captions, effects or watermark-free export behind
 | **Keyframe animation** | Animate position, scale, rotation and opacity with smooth easing. What you see in the preview is exactly what exports. |
 | **32 effects** | Color grading (cinematic teal & orange, vintage, noir, warm/cool…), stylize (vignette, film grain, glitch, RGB split, pixelate…) and motion (Ken Burns, slow zoom, punch-in, camera shake). |
 | **11 transitions** | Cross dissolve, fade, flash, four slides, zoom pop, blur in, fade out, dip to white. |
-| **✨ Auto Edit** | *Talking video:* removes silences, hides jump cuts with punch-in zooms, adds captions and applies a look. *Music montage:* detects the song's beat and cuts your clips and photos to it. |
+| **✨ Auto Edit** | One-click presets (Talking head, Vlog, Podcast clip, Music montage). Removes silences and **filler words** ("um", "uh", stutters), hides jump cuts with punch-in zooms, adds **auto B-roll** from your other clips, **makes a Short** from the best 30–60 seconds, adds captions and a look. *Music montage* cuts your clips to the beat. |
+| **🎨 Elements** | 35 stickers (emoji, arrows, badges) that pop in, 10 animated backgrounds, 7 overlays (light leak, bokeh, confetti, snow, sparkles, film dust, VHS) and 9 intro & outro templates. |
+| **⭕ Shapes & split screen** | Rounded or circle clips, and split-screen layouts (top/bottom, left/right, thirds, card). |
 | **Audio** | Per-clip volume (0–200%), fades, speed 0.25×–4× with pitch-correct audio, one-click **voice clean-up** (noise reduction), **auto-ducking** of music under speech, and loudness normalization to −14 LUFS for social media. |
 | **Export** | MP4 (H.264/AAC) with progress and cancel. No watermark, no limits. |
 | **Safe** | Project files (`.clipmaster`), autosave and crash recovery. |
