@@ -1,3 +1,5 @@
+import type { FitMode, FocusPoint } from "./reframe";
+
 export type AssetKind = "video" | "audio" | "image";
 
 export interface MediaAsset {
@@ -49,6 +51,10 @@ export interface MediaClip extends ClipBase {
   keyframes?: Keyframe[];
   /** Voice clean-up on this clip's audio. */
   denoise?: boolean;
+  /** How the clip fills a differently shaped canvas. Undefined = project default. */
+  fit?: FitMode;
+  /** Where to centre the crop over time (Smart reframe), in source seconds. */
+  focus?: FocusPoint[];
 }
 
 export interface Keyframe extends Transform {
@@ -101,6 +107,8 @@ export interface ProjectSettings {
   fps: number;
   /** Lower background music automatically while someone is speaking. */
   autoDuck?: boolean;
+  /** Default fit for clips whose shape differs from the canvas. Undefined = fill. */
+  fit?: FitMode;
 }
 
 export interface CaptionWord {

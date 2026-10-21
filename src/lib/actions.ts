@@ -3,9 +3,10 @@ import { applyAutoZoom } from "../core/autozoom";
 import { beatSyncMontage, detectBeats, findMusicClip, MontageOptions } from "../core/beats";
 import { parseSrt, toSrt } from "../core/captions";
 import {
-  addAsset, addText, clipEnd, clipsOnTrack, createProject, deleteClips, duplicateClip, placeAsset, splitClip, trackAccepts, addTrack, uid,
+  addAsset, addText, clipEnd, updateClip, clipsOnTrack, createProject, deleteClips, duplicateClip, placeAsset, splitClip, trackAccepts, addTrack, uid,
 } from "../core/project";
-import type { CaptionWord, MediaAsset, Project } from "../core/types";
+import { FitMode, FocusPoint, locateSubject, sampleSize, smoothPath, unpackFrames } from "../core/reframe";
+import type { CaptionWord, MediaAsset, MediaClip, Project } from "../core/types";
 import { useEditor } from "../store";
 import { invoke, isTauri, openDialog, pickMediaFiles, probe, saveDialog, thumbnail } from "./backend";
 
@@ -311,4 +312,50 @@ export function autoZoom(): string {
   if (!r.zooms) return "No clear emphasis moments found (or clips already have hand-made keyframes).";
   S().commit(() => r.project);
   return `Added ${r.zooms} zooms on key moments.`;
+}
+
+// ---------- reframe ----------
+
+/** Media clips Smart reframe can work on: selected video clips, or all of them. */
+function reframeTargets(p: Project, ids: string[]): MediaClip[] {
+  const all = Object.values(p.clips).filter(
+    (c): c is MediaClip => c.type === "media" && p.assets[c.assetId]?.kind === "video" && !c.transform && !c.keyframes?.length
+  );
+  const picked = all.filter((c) => ids.includes(c.id));
+  return picked.length ? picked : all;
+}
+
+/**
+ * Track the subject in each video clip and store a smooth crop path, so
+ * "Fill" keeps the person (or the action) in frame.
+ */
+export async function smartReframe(onProgress: (msg: string) => void, ids = S().selected): Promise<string> {
+  if (!isTauri) throw new Error("Smart reframe needs the desktop app.");
+  const targets = reframeTargets(S().project, ids);
+  if (!targets.length) throw new Error("Add a video clip to the timeline first.");
+  const paths: Record<string, FocusPoint[]> = {};
+  let i = 0;
+  for (const c of targets) {
+    const asset = S().project.assets[c.assetId];
+    onProgress(`Finding the subject (${++i}/${targets.length})…`);
+    const size = sampleSize(asset.width, asset.height);
+    // ~3 samples a second, capped so long clips stay quick.
+    const fps = Math.min(3, 240 / Math.max(0.5, c.out - c.in));
+    const b64 = await invoke<string>("sample_frames", { path: asset.path, start: c.in, end: c.out, fps, ...size });
+    const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+    paths[c.id] = smoothPath(locateSubject(unpackFrames(bytes, size.width, size.height, c.in, fps)));
+  }
+  S().commit((p) => Object.entries(paths).reduce((acc, [id, focus]) => (acc.clips[id] ? updateClip(acc, id, { focus, fit: "fill" }) : acc), p));
+  return `Smart reframe tracked ${targets.length} clip${targets.length > 1 ? "s" : ""}.`;
+}
+
+/** Switch the canvas shape (e.g. to 9:16) and reframe every clip to fill it. */
+export async function makeFormat(width: number, height: number, fit: FitMode, onProgress: (msg: string) => void): Promise<string> {
+  S().commit((p) => ({ ...p, settings: { ...p.settings, width, height, fit } }));
+  if (fit !== "fill" || !isTauri) return `Canvas set to ${width}×${height}.`;
+  try {
+    return `Canvas set to ${width}×${height}. ${await smartReframe(onProgress, [])}`;
+  } catch (e) {
+    return `Canvas set to ${width}×${height}. ${errorText(e)}`;
+  }
 }

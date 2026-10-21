@@ -3,6 +3,9 @@ import { clipDuration, IDENTITY_TRANSFORM, PIP_PRESETS, transformAt, transformPa
 import { upsertKeyframe } from "../core/keyframes";
 import { TEXT_PRESETS } from "../core/textPresets";
 import { ASPECT_PRESETS, MediaClip, TextClip } from "../core/types";
+import { clipFit, FIT_MODES, focusAt, needsReframe } from "../core/reframe";
+import { useState } from "react";
+import { errorText, makeFormat, notify, smartReframe } from "../lib/actions";
 import { useEditor } from "../store";
 import { formatTime } from "./Preview";
 import { SHORTCUTS } from "./shortcuts";
@@ -56,6 +59,8 @@ function MediaInspector({ clip }: { clip: MediaClip }) {
       )}
       {visual && (
         <>
+          <div className="section-title">Frame</div>
+          <FrameControls clip={clip} />
           <div className="section-title">Transform</div>
           <TransformControls clip={clip} set={set} />
           <div className="section-title">Transitions</div>
@@ -161,6 +166,13 @@ function ProjectInspector() {
           {ASPECT_PRESETS.map((p) => <option key={p.label}>{p.label}</option>)}
         </select>
       </label>
+      <label className="field" title="How clips with a different shape fill the canvas (e.g. landscape video in a 9:16 project)">
+        <span>Clips with a different shape</span>
+        <select value={settings.fit ?? "fill"} onChange={(e) => commit((p) => ({ ...p, settings: { ...p.settings, fit: e.target.value as never } }))}>
+          {FIT_MODES.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+        </select>
+      </label>
+      <MakeFormat />
       <label className="field">
         <span>Frame rate</span>
         <select value={settings.fps} onChange={(e) => commit((p) => ({ ...p, settings: { ...p.settings, fps: +e.target.value } }))}>
@@ -232,6 +244,78 @@ function TransformControls({ clip, set }: { clip: MediaClip; set: (p: Partial<Me
       <p className="small muted" style={{ margin: 0 }}>
         {keys.length ? "Changing a value writes a keyframe at the playhead." : "Tip: drag the clip in the preview to move it, scroll to resize. Add keyframes to animate."}
       </p>
+    </div>
+  );
+}
+
+function FrameControls({ clip }: { clip: MediaClip }) {
+  const settings = useEditor((s) => s.project.settings);
+  const asset = useEditor((s) => s.project.assets[clip.assetId]);
+  const playhead = useEditor((s) => s.playhead);
+  const { commit } = useEditor.getState();
+  const [busy, setBusy] = useState<string | null>(null);
+  const mode = clipFit(clip, settings);
+  const set = (patch: Partial<MediaClip>) => commit((p) => updateClip(p, clip.id, patch));
+  const moved = !!clip.transform || !!clip.keyframes?.length;
+  const src = clip.in + Math.max(0, playhead - clip.start) * clip.speed;
+  const f = focusAt(clip.focus, src);
+  return (
+    <div className="fx-item">
+      {!needsReframe(asset?.width, asset?.height, settings.width, settings.height) && (
+        <p className="small muted" style={{ margin: 0 }}>This clip already matches the canvas shape.</p>
+      )}
+      <div className="row" style={{ gap: 4 }}>
+        {FIT_MODES.map((m) => (
+          <button key={m.id} className={mode === m.id ? "small primary" : "small"} title={m.hint} onClick={() => set({ fit: m.id, transform: undefined, keyframes: undefined })}>
+            {m.label}
+          </button>
+        ))}
+      </div>
+      {moved && <p className="small muted" style={{ margin: 0 }}>Moved or resized clips keep their own size. Pick a mode above to reset.</p>}
+      {asset?.kind === "video" && (
+        <button
+          disabled={!!busy}
+          title="Find the person or action in the clip and keep it centred when cropping"
+          onClick={async () => {
+            try {
+              notify(await smartReframe(setBusy, [clip.id]));
+            } catch (e) {
+              notify(errorText(e));
+            } finally {
+              setBusy(null);
+            }
+          }}
+        >
+          {busy ?? "🎯 Smart reframe"}
+        </button>
+      )}
+      {mode !== "fit" && (
+        <Num
+          label={clip.focus && clip.focus.length > 1 ? "Focus (tracked — dragging fixes it)" : "Focus left ↔ right"}
+          value={f.x * 100} min={0} max={100} step={1} suffix="%"
+          onChange={(v) => set({ focus: [{ t: 0, x: v / 100, y: f.y }] })}
+        />
+      )}
+    </div>
+  );
+}
+
+function MakeFormat() {
+  const [busy, setBusy] = useState<string | null>(null);
+  const run = async (w: number, h: number) => {
+    try {
+      notify(await makeFormat(w, h, "fill", setBusy));
+    } catch (e) {
+      notify(errorText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="row" style={{ gap: 4, flexWrap: "wrap" }} title="Change the canvas and reframe every clip to follow its subject">
+      <button className="primary" disabled={!!busy} onClick={() => run(1080, 1920)}>{busy ?? "📱 Make vertical 9:16"}</button>
+      {!busy && <button className="small" onClick={() => run(1080, 1080)}>1:1</button>}
+      {!busy && <button className="small" onClick={() => run(1080, 1350)}>4:5</button>}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { clipFit, reframeGraph } from "./reframe";
 import { clipDuration, clipEnd, clipsOnTrack, projectDuration } from "./project";
 import { buildAss } from "./captions";
 import { effectById, slideOverlay, transitionFilters } from "./effects";
@@ -125,11 +126,18 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
       // effects see the fitted frame size instead of the canvas size.
       const fit = fittedSize(asset.width, asset.height, W, H);
       const ctx = tf ? { W: fit.w, H: fit.h, fps, duration: dur } : { W, H, fps, duration: dur };
-      const chain = [
+      const head = [
         isImage ? `trim=duration=${n(shown)}` : `trim=start=${n(c.in)}:end=${n(c.out + tail * c.speed)}`,
         `setpts=(PTS-STARTPTS)/${n(c.speed)}`,
-        tf ? `scale=${fit.w}:${fit.h}` : `scale=${W}:${H}:force_original_aspect_ratio=decrease`,
-        tf ? "" : `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black`,
+      ];
+      // Untransformed clips fill the canvas per their fit mode (fit / fill / blur).
+      if (!tf) {
+        filters.push(`[${idx}:v]${head.join(",")}[r${vi}in]`);
+        filters.push(reframeGraph(c, asset, W, H, clipFit(c, p.settings), `r${vi}in`, `r${vi}`));
+      }
+      const chain = [
+        ...(tf ? head : []),
+        tf ? `scale=${fit.w}:${fit.h}` : "",
         "setsar=1",
         `fps=${fps}`,
         ...(c.effects ?? []).map((e) => effectById(e.id)?.filter(e.amount, ctx)).filter((x): x is string => !!x),
@@ -138,7 +146,7 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
         ...(keys ? keyframeFilters(keys, fit) : tf ? transformFilters(tf) : []),
         `setpts=PTS+${n(c.start)}/TB`,
       ].filter(Boolean);
-      filters.push(`[${idx}:v]${chain.join(",")}[v${vi}]`);
+      filters.push(`[${tf ? `${idx}:v` : `r${vi}`}]${chain.join(",")}[v${vi}]`);
       const pos = slideOverlay(c.transIn, c.start);
       const tv = `(t-${n(c.start)})`;
       const cx = keys ? keyframeExpr(keys, "x", tv) : n(tf?.x ?? 0.5);
