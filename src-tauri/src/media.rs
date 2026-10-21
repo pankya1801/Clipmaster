@@ -577,6 +577,134 @@ pub async fn stock_download(app: AppHandle, url: String, name: String) -> Result
     .map_err(|e| e.to_string())?
 }
 
+
+/// Hosts BYOK AI requests may contact (and download results from).
+const AI_HOSTS: &[&str] = &["api.openai.com", "openrouter.ai", "api.anthropic.com", "fal.run", "queue.fal.run", "fal.media", "api.elevenlabs.io"];
+
+fn host_in(url: &str, hosts: &[&str]) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else { return false };
+    let host = rest.split(['/', '?', ':', '#']).next().unwrap_or("");
+    hosts.iter().any(|h| host == *h || host.ends_with(&format!(".{h}")))
+}
+
+fn ai_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("ai");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+fn safe_name(name: &str) -> Result<String, String> {
+    let safe: String = name.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')).collect();
+    if safe.is_empty() || safe.starts_with('.') {
+        return Err("Invalid file name".into());
+    }
+    Ok(safe)
+}
+
+/// Send a request to an AI provider with the user's own key. Returns the
+/// response text, or — when `save_as` is set — saves the (binary) body in the
+/// app's `ai` folder and returns the file path.
+#[tauri::command]
+pub async fn ai_request(
+    app: AppHandle,
+    url: String,
+    method: String,
+    headers: std::collections::HashMap<String, String>,
+    body: Option<String>,
+    save_as: Option<String>,
+) -> Result<String, String> {
+    if !host_in(&url, AI_HOSTS) {
+        return Err("Not an allowed AI provider URL".into());
+    }
+    let dest = match &save_as {
+        Some(n) => Some(ai_dir(&app)?.join(safe_name(n)?)),
+        None => None,
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut req = ureq::request(if method == "GET" { "GET" } else { "POST" }, &url).timeout(std::time::Duration::from_secs(300));
+        for (k, v) in &headers {
+            req = req.set(k, v);
+        }
+        let res = match &body {
+            Some(b) => req.send_string(b),
+            None => req.call(),
+        };
+        let resp = match res {
+            Ok(r) => r,
+            Err(ureq::Error::Status(code, r)) => {
+                let text = r.into_string().unwrap_or_default();
+                let msg = serde_json::from_str::<serde_json::Value>(&text)
+                    .ok()
+                    .and_then(|v| {
+                        v.pointer("/error/message")
+                            .or_else(|| v.pointer("/detail/message"))
+                            .or_else(|| v.pointer("/detail/0/msg"))
+                            .or_else(|| v.get("detail"))
+                            .or_else(|| v.get("error"))
+                            .map(|m| m.as_str().map(|s| s.to_string()).unwrap_or_else(|| m.to_string()))
+                    })
+                    .unwrap_or_else(|| text.chars().take(200).collect());
+                return Err(match code {
+                    401 | 403 => format!("The API key was refused ({code}). Check it in Settings → AI. {msg}"),
+                    429 => format!("Rate limit or credits exhausted (429). {msg}"),
+                    _ => format!("AI request failed ({code}): {msg}"),
+                });
+            }
+            Err(e) => return Err(format!("AI request failed: {e}")),
+        };
+        match dest {
+            Some(path) => {
+                let mut bytes = Vec::new();
+                resp.into_reader().read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+                std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+                Ok(path.to_string_lossy().into_owned())
+            }
+            None => resp.into_string().map_err(|e| e.to_string()),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Save base64 data (an AI image) in the app's `ai` folder; returns the path.
+#[tauri::command]
+pub fn ai_save_base64(app: AppHandle, name: String, data_base64: String) -> Result<String, String> {
+    let path = ai_dir(&app)?.join(safe_name(&name)?);
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data_base64).map_err(|e| e.to_string())?;
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// Write base64 data to a path the user picked in a save dialog (thumbnails).
+#[tauri::command]
+pub fn write_binary_file(path: String, data_base64: String) -> Result<(), String> {
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data_base64).map_err(|e| e.to_string())?;
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())
+}
+
+/// The RNNoise speech model for "Studio voice" (downloaded once, ~300 KB).
+#[tauri::command]
+pub async fn voice_model(app: AppHandle) -> Result<String, String> {
+    let path = models_dir(&app)?.join("rnnoise-sh.rnnn");
+    if path.exists() {
+        return Ok(path.to_string_lossy().into_owned());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let url = "https://raw.githubusercontent.com/GregorR/rnnoise-models/master/somnolent-hogwash-2018-09-01/sh.rnnn";
+        let resp = ureq::get(url).call().map_err(|e| format!("Download failed: {e}"))?;
+        let mut bytes = Vec::new();
+        resp.into_reader().read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+        if bytes.len() < 10_000 {
+            return Err("Download incomplete, please try again".into());
+        }
+        std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+        Ok(path.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -585,6 +713,14 @@ mod tests {
         let path = std::env::temp_dir().join(name);
         let ok = command("ffmpeg").args(["-v", "error", "-y"]).args(args).arg(&path).status().ok()?.success();
         ok.then(|| path.to_string_lossy().into_owned())
+    }
+
+    #[test]
+    fn ai_hosts_are_allow_listed() {
+        assert!(host_in("https://api.openai.com/v1/images/generations", AI_HOSTS));
+        assert!(host_in("https://v3.fal.media/files/x.png", AI_HOSTS));
+        assert!(!host_in("https://api.openai.com.evil.io/x", AI_HOSTS));
+        assert!(!host_in("http://api.anthropic.com/v1/messages", AI_HOSTS));
     }
 
     #[test]

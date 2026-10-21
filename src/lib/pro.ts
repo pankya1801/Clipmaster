@@ -117,7 +117,7 @@ export async function importLut(): Promise<string> {
 // ---------- background removal ----------
 
 /** Asset URLs for MediaPipe's offline selfie segmentation (bundled by Vite). */
-async function mediapipeFiles(): Promise<Record<string, string>> {
+export async function mediapipeFiles(): Promise<Record<string, string>> {
   const base = "@mediapipe/selfie_segmentation/";
   const m = await Promise.all([
     import("@mediapipe/selfie_segmentation/selfie_segmentation.binarypb?url"),

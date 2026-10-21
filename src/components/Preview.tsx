@@ -1,6 +1,6 @@
 import { sourceTimeAt } from "../core/speed";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { captionTemplate, groupCaptionLines } from "../core/captions";
+import { captionTemplate, styledTemplate, groupCaptionLines } from "../core/captions";
 import { effectsCss, transitionPreview } from "../core/effects";
 import { fittedSize } from "../core/ffmpeg";
 import { clipDuration, clipEnd, clipsOnTrack, IDENTITY_TRANSFORM, projectDuration, textsAt, transformAt, transformPatch, updateClip } from "../core/project";
@@ -317,7 +317,7 @@ function CaptionOverlay({ lines, t, scale }: { lines: ReturnType<typeof groupCap
   const H = useEditor((s) => s.project.settings.height);
   const line = lines.find((l) => t >= l.start && t < l.end);
   if (!line) return null;
-  const tpl = captionTemplate(settings.templateId);
+  const tpl = styledTemplate(settings);
   const { base, active } = captionCss(tpl, tpl.size * H * settings.scale * scale);
   const idx = line.words.findIndex((w, i) => t >= w.start && t < (line.words[i + 1]?.start ?? line.end));
   const y = settings.y ?? (tpl.position === "top" ? 0.12 : tpl.position === "center" ? 0.5 : 0.86);

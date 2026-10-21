@@ -1,7 +1,7 @@
 {
   "name": "clipmaster",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Free, open-source desktop video editor — an alternative to CapCut and Filmora.",
   "license": "MIT",
   "type": "module",
@@ -14,6 +14,7 @@
     "previews": "tsx scripts/render-previews.ts"
   },
   "dependencies": {
+    "@mediapipe/face_detection": "^0.4.1646425229",
     "@mediapipe/selfie_segmentation": "^0.1.1675465747",
     "@tauri-apps/api": "^2.12.0",
     "@tauri-apps/plugin-dialog": "^2.7.3",

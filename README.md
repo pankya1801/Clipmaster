@@ -51,6 +51,10 @@ Many popular editors keep auto-captions, effects or watermark-free export behind
 | **📝 Edit by text** | Click words in the transcript and cut them — the video is cut too. Captions can be **translated to English**. |
 | **🗣 Voice & sounds** | **Text to speech** with your system voices, 15 sound effects and 3 royalty-free beats, and **beat markers** that clips snap to. |
 | **🎞 Stock footage** | Search free **Pexels** and **Pixabay** videos and photos inside the app (bring your own free API key), add them in one click, or let **Auto stock B-roll** cover what you talk about. Credits are collected for your description. |
+| **🤖 AI (bring your own key)** | **Viral clip finder** picks the best Shorts from a long video with hooks and scores · **AI images** (OpenAI / fal.ai) as B-roll, backgrounds or stickers · **AI voices** (OpenAI / ElevenLabs) and **one-click dubbing** into 14 languages · **titles, descriptions & hashtags** · smarter **stock B-roll search**. Use OpenAI, Anthropic, OpenRouter, fal.ai or ElevenLabs keys — you pay the provider directly, nothing goes through us. |
+| **🖼 Thumbnail maker** | Picks the best frame, pops out the person with an outline, adds big bold text — 1280×720 PNG. |
+| **🏷 Brand kit** | Your logo watermark, fonts and colours applied to titles and captions in one click. |
+| **🧠 Offline AI** | **Studio voice** (RNNoise neural noise removal), **smooth slow motion** (motion interpolation), **Enhance** (denoise, sharpen, Lanczos upscaling) and **auto face blur**. |
 | **📦 Shareable templates** | Save an edit as a `.cmtemplate` file (no media inside) and reuse it with new clips. |
 | **Export** | MP4, MOV, WebM or **GIF**, with one-click presets (TikTok/Reels, YouTube 4K, web, GIF). No watermark, no limits. |
 | **Safe** | Project files (`.clipmaster`), autosave and crash recovery. |
