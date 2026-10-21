@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_AUTO_EDIT } from "../core/autoedit";
 import { EFFECTS } from "../core/effects";
-import { buildExportPlan, ExportQuality } from "../core/ffmpeg";
+import { buildExportPlan, ExportFormat, ExportQuality } from "../core/ffmpeg";
 import { projectDuration } from "../core/project";
 import { AUTO_EDIT_PRESETS } from "../core/smartcut";
 import { AutoEditRun, errorText, loadWhisperConfig, runAutoEdit, runBeatSync, saveWhisperConfig, WhisperModel } from "../lib/actions";
@@ -22,10 +22,27 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 
 const RESOLUTIONS = [
   { label: "Project size", scale: 0 },
+  { label: "480p", scale: 480 },
   { label: "720p", scale: 720 },
   { label: "1080p", scale: 1080 },
   { label: "1440p", scale: 1440 },
   { label: "4K (2160p)", scale: 2160 },
+];
+
+const FORMATS: { id: ExportFormat; label: string; filter: string }[] = [
+  { id: "mp4", label: "MP4 (H.264)", filter: "MP4 video" },
+  { id: "mov", label: "MOV (H.264)", filter: "QuickTime video" },
+  { id: "webm", label: "WebM (VP9)", filter: "WebM video" },
+  { id: "gif", label: "GIF (no sound)", filter: "Animated GIF" },
+];
+
+/** One-click settings for common destinations. */
+export const EXPORT_PRESETS: { id: string; name: string; res: number; quality: ExportQuality; format: ExportFormat; loudness: boolean }[] = [
+  { id: "tiktok", name: "TikTok / Reels / Shorts", res: 1080, quality: "standard", format: "mp4", loudness: true },
+  { id: "youtube", name: "YouTube 4K", res: 2160, quality: "high", format: "mp4", loudness: true },
+  { id: "web", name: "Website (small)", res: 720, quality: "standard", format: "webm", loudness: false },
+  { id: "gif", name: "GIF (480p)", res: 480, quality: "standard", format: "gif", loudness: false },
+  { id: "draft", name: "Quick preview", res: 720, quality: "draft", format: "mp4", loudness: false },
 ];
 
 export function ExportDialog({ onClose }: { onClose: () => void }) {
@@ -33,6 +50,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
   const [quality, setQuality] = useState<ExportQuality>("standard");
   const [res, setRes] = useState(0);
   const [loudness, setLoudness] = useState(true);
+  const [format, setFormat] = useState<ExportFormat>("mp4");
   const [progress, setProgress] = useState<number | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const total = projectDuration(project);
@@ -56,14 +74,15 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
   }, [total]);
 
   const start = async () => {
-    const out = await saveDialog(`${project.name}.mp4`, "mp4", "MP4 video");
+    const f = FORMATS.find((x) => x.id === format)!;
+    const out = await saveDialog(`${project.name}.${format}`, format, f.filter);
     if (!out) return;
     try {
       setStatus("Exporting…");
       setProgress(0);
       const [tempDir, fontsDir] = await Promise.all([invoke<string>("temp_dir"), invoke<string | null>("fonts_dir")]);
       const fontFile = fontsDir ? `${fontsDir}/Montserrat-ExtraBold.ttf` : undefined;
-      const plan = buildExportPlan(project, { outputPath: out, tempDir, quality, fontsDir: fontsDir ?? undefined, fontFile, normalizeLoudness: loudness, ...size });
+      const plan = buildExportPlan(project, { outputPath: out, tempDir, quality, fontsDir: fontsDir ?? undefined, fontFile, normalizeLoudness: loudness, format, ...size });
       await invoke("export_video", { args: plan.args, files: plan.files });
       setProgress(1);
       setStatus(`Saved to ${out}`);
@@ -77,7 +96,18 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Export video" onClose={() => !running && onClose()}>
       {!isTauri && <p className="banner">Export needs the Clipmaster desktop app (it uses FFmpeg on your computer).</p>}
+      <div className="preset-chips">
+        {EXPORT_PRESETS.map((pr) => (
+          <button key={pr.id} disabled={running} onClick={() => { setRes(pr.res); setQuality(pr.quality); setFormat(pr.format); setLoudness(pr.loudness); }}>{pr.name}</button>
+        ))}
+      </div>
       <div className="row">
+        <label className="field grow">
+          <span>Format</span>
+          <select value={format} onChange={(e) => setFormat(e.target.value as ExportFormat)} disabled={running}>
+            {FORMATS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+          </select>
+        </label>
         <label className="field grow">
           <span>Resolution</span>
           <select value={res} onChange={(e) => setRes(+e.target.value)} disabled={running}>
@@ -94,7 +124,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
         </label>
       </div>
       <label className="check"><input type="checkbox" checked={loudness} onChange={(e) => setLoudness(e.target.checked)} disabled={running} /> Normalise loudness for social media (−14 LUFS)</label>
-      <p className="muted small">MP4 (H.264 + AAC) · {size.width}×{size.height} · {project.settings.fps} fps · {total.toFixed(1)}s · no watermark</p>
+      <p className="muted small">{FORMATS.find((f) => f.id === format)!.label} · {size.width}×{size.height} · {project.settings.fps} fps · {total.toFixed(1)}s · no watermark</p>
       {progress != null && <div className="progress"><div style={{ width: `${Math.round(progress * 100)}%` }} /></div>}
       {status && <p className="small" style={{ userSelect: "text", whiteSpace: "pre-wrap" }}>{status}</p>}
       <div className="row">

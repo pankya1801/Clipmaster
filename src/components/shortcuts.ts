@@ -8,6 +8,7 @@ export const SHORTCUTS: [key: string, what: string][] = [
   ["Ctrl+Z / Ctrl+Shift+Z", "Undo / redo"],
   ["Ctrl+D", "Duplicate"],
   ["T", "Add text"],
+  ["M", "Add marker"],
   ["← / →", "Step one frame"],
   ["Ctrl+S", "Save"],
   ["Ctrl+I", "Import"],

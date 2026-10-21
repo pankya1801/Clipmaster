@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { addMarkerAtPlayhead } from "./lib/pro";
 import { AutoEditDialog, ExportDialog, SettingsDialog, ShortcutsDialog } from "./components/Dialogs";
 import { Inspector } from "./components/Inspector";
 import { LeftPanel } from "./components/LeftPanel";
@@ -96,6 +97,7 @@ export default function App() {
       else if (key === " ") (s.setPlaying(!s.playing), handled());
       else if (key === "s") splitAtPlayhead();
       else if (key === "t") addTextAtPlayhead();
+      else if (key === "m") addMarkerAtPlayhead();
       else if (key === "delete" || key === "backspace") (deleteSelected(e.shiftKey), handled());
       else if (key === "arrowleft") (s.setPlayhead(s.playhead - (e.shiftKey ? 1 : frame)), handled());
       else if (key === "arrowright") (s.setPlayhead(s.playhead + (e.shiftKey ? 1 : frame)), handled());

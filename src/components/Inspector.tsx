@@ -10,6 +10,8 @@ import { errorText, makeFormat, notify, smartReframe } from "../lib/actions";
 import { useEditor } from "../store";
 import { formatTime } from "./Preview";
 import { SHORTCUTS } from "./shortcuts";
+import { RAMP_PRESETS } from "../core/speed";
+import { freezeFrame, importLut, removeBackground, setRamp, toggleReverse, trackSelected } from "../lib/pro";
 
 function Num({ label, value, min, max, step = 0.1, suffix = "", onChange }: {
   label: string; value: number; min: number; max: number; step?: number; suffix?: string; onChange: (v: number) => void;
@@ -48,6 +50,7 @@ function MediaInspector({ clip }: { clip: MediaClip }) {
         <div className="muted small">Starts {formatTime(clip.start)} · {formatTime(dur)} long</div>
       </div>
       <Num label="Speed" value={clip.speed} min={0.25} max={4} step={0.05} suffix="×" onChange={(speed) => set({ speed })} />
+      {asset?.kind === "video" && <TimeControls clip={clip} />}
       {asset?.hasAudio && (
         <>
           <Num label="Volume" value={clip.volume * 100} min={0} max={200} step={1} suffix="%" onChange={(v) => set({ volume: v / 100 })} />
@@ -62,8 +65,10 @@ function MediaInspector({ clip }: { clip: MediaClip }) {
         <>
           <div className="section-title">Frame</div>
           <FrameControls clip={clip} />
+          {asset?.kind === "video" && <><div className="section-title">Cut-out &amp; look</div><LookControls clip={clip} /></>}
           <div className="section-title">Transform</div>
           <TransformControls clip={clip} set={set} />
+          {asset?.kind === "image" || asset?.path.startsWith(GEN_PREFIX) ? <TrackButton /> : null}
           <div className="section-title">Transitions</div>
           {(["transIn", "transOut"] as const).map((key) => {
             const side = key === "transIn" ? "in" : "out";
@@ -280,6 +285,7 @@ function FrameControls({ clip }: { clip: MediaClip }) {
           <button key={m.label} className={clip.mask === m.id ? "small primary" : "small"} onClick={() => set({ mask: m.id })}>{m.label}</button>
         ))}
       </div>
+      {clip.mask && <Num label="Soft edge (feather)" value={(clip.feather ?? 0) * 100} min={0} max={100} step={1} suffix="%" onChange={(v) => set({ feather: v / 100 || undefined })} />}
       <div className="small muted">Layout (split screen)</div>
       <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
         {LAYOUTS.map((l) => {
@@ -336,5 +342,91 @@ function MakeFormat() {
       {!busy && <button className="small" onClick={() => run(1080, 1080)}>1:1</button>}
       {!busy && <button className="small" onClick={() => run(1080, 1350)}>4:5</button>}
     </div>
+  );
+}
+
+/** Run an async action with a busy label and a toast. */
+function useRunner() {
+  const [busy, setBusy] = useState<string | null>(null);
+  const run = async (label: string, fn: (progress: (m: string) => void) => Promise<string> | string) => {
+    setBusy(label);
+    try {
+      const msg = await fn(setBusy);
+      if (msg) notify(msg);
+    } catch (e) {
+      notify(errorText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return { busy, run };
+}
+
+function TimeControls({ clip }: { clip: MediaClip }) {
+  const { busy, run } = useRunner();
+  const ramp = clip.ramp ? RAMP_PRESETS.find((r) => JSON.stringify(r.points) === JSON.stringify(clip.ramp)) : undefined;
+  return (
+    <div className="fx-item">
+      <div className="small muted">Speed ramp</div>
+      <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
+        <button className={!clip.ramp ? "small primary" : "small"} onClick={() => run("", () => setRamp(null))}>None</button>
+        {RAMP_PRESETS.map((r) => (
+          <button key={r.id} className={ramp?.id === r.id ? "small primary" : "small"} title={r.hint} onClick={() => run("", () => setRamp(r.id))}>{r.name}</button>
+        ))}
+      </div>
+      <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
+        <button className={clip.reverse ? "small primary" : "small"} onClick={() => run("", toggleReverse)} title="Play this clip backwards (exported)">⏪ Reverse</button>
+        <button className="small" disabled={!!clip.freeze} onClick={() => run("", () => freezeFrame(2))} title="Hold the frame under the playhead for 2 seconds">❄ Freeze frame</button>
+        {busy && <span className="small muted">{busy}</span>}
+      </div>
+      {clip.freeze && <p className="small muted" style={{ margin: 0 }}>Freeze frame — holds one picture.</p>}
+    </div>
+  );
+}
+
+function LookControls({ clip }: { clip: MediaClip }) {
+  const { commit } = useEditor.getState();
+  const set = (patch: Partial<MediaClip>) => commit((p) => updateClip(p, clip.id, patch));
+  const { busy, run } = useRunner();
+  const k = clip.chroma;
+  return (
+    <div className="fx-item">
+      <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
+        <button disabled={!!busy} className={clip.bgMask ? "small primary" : "small"} onClick={() => (clip.bgMask ? set({ bgMask: undefined }) : run("Removing background…", removeBackground))} title="Cut out the person — no green screen needed. Runs on your computer.">
+          {busy ?? (clip.bgMask ? "✂ Background removed (undo)" : "✂ Remove background")}
+        </button>
+        <button disabled={!!busy} className={clip.stabilize ? "small primary" : "small"} onClick={() => set({ stabilize: !clip.stabilize || undefined })} title="Smooth out shaky footage (crops the edges slightly). Applied on export.">
+          🤚 Stabilize
+        </button>
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={!!k} onChange={(e) => set({ chroma: e.target.checked ? { color: "#00ff00", similarity: 0.3, blend: 0.1 } : undefined })} /> Chroma key (green screen)
+      </label>
+      {k && (
+        <>
+          <label className="field">
+            <span>Key colour</span>
+            <input type="color" value={k.color} onChange={(e) => set({ chroma: { ...k, color: e.target.value } })} />
+          </label>
+          <Num label="Similarity" value={k.similarity * 100} min={1} max={80} step={1} suffix="%" onChange={(v) => set({ chroma: { ...k, similarity: v / 100 } })} />
+          <Num label="Edge blend" value={k.blend * 100} min={0} max={50} step={1} suffix="%" onChange={(v) => set({ chroma: { ...k, blend: v / 100 } })} />
+        </>
+      )}
+      <div className="row" style={{ gap: 4 }}>
+        <button className="small" onClick={() => run("", importLut)} title="Apply a colour grade from a .cube LUT file">🎨 {clip.lut ? `LUT: ${clip.lut.name}` : "Import LUT…"}</button>
+        {clip.lut && <button className="small ghost" onClick={() => set({ lut: undefined })}>×</button>}
+      </div>
+      {clip.lut && <Num label="LUT strength" value={clip.lut.amount * 100} min={0} max={100} step={1} suffix="%" onChange={(v) => set({ lut: { ...clip.lut!, amount: v / 100 } })} />}
+    </div>
+  );
+}
+
+/** For stickers and overlays: follow a moving object in the video underneath. */
+export function TrackButton() {
+  const { busy, run } = useRunner();
+  return (
+    <button disabled={!!busy} title="Place the sticker on the object first, then press to make it follow the object" onClick={() => run("Tracking…", trackSelected)}>
+      {busy ?? "🎯 Track motion (follow object)"}
+    </button>
   );
 }

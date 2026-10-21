@@ -1,5 +1,6 @@
 import { clipFit, reframeGraph } from "./reframe";
 import { boxPixels, generatorOfPath, maskFilter } from "./visuals";
+import { silentTiming, timingFilters } from "./speed";
 import { clipDuration, clipEnd, clipsOnTrack, projectDuration } from "./project";
 import { buildAss } from "./captions";
 import { effectById, slideOverlay, transitionFilters } from "./effects";
@@ -8,6 +9,8 @@ import { buildTextAss, textPreset } from "./textPresets";
 import type { Keyframe, MediaClip, Project, TextClip } from "./types";
 
 export type ExportQuality = "draft" | "standard" | "high";
+
+export type ExportFormat = "mp4" | "webm" | "mov" | "gif";
 
 export interface ExportOptions {
   outputPath: string;
@@ -20,6 +23,8 @@ export interface ExportOptions {
   fontsDir?: string;
   /** Normalise loudness to -14 LUFS (YouTube / TikTok / Instagram target). */
   normalizeLoudness?: boolean;
+  /** Container / codec. GIF has no sound and runs at up to 15 fps. */
+  format?: ExportFormat;
   /** Override output size (defaults to project settings). */
   width?: number;
   height?: number;
@@ -115,7 +120,7 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
       // A cross dissolve on the next clip needs this clip to keep playing under it.
       const next = clips[ci + 1];
       let tail = 0;
-      if (next?.type === "media" && next.transIn?.id === "dissolve" && Math.abs(next.start - clipEnd(c)) < 0.05) {
+      if (next?.type === "media" && next.transIn?.id === "dissolve" && Math.abs(next.start - clipEnd(c)) < 0.05 && !c.freeze && !c.reverse && !c.ramp?.length) {
         tail = Math.min(next.transIn.duration, clipDuration(next));
         if (!isImage) tail = Math.min(tail, Math.max(0, (asset.duration - c.out) / c.speed));
       }
@@ -135,29 +140,42 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
       // effects see the fitted frame size instead of the canvas size.
       const fit = fittedSize(media.width, media.height, W, H);
       const ctx = tf ? { W: fit.w, H: fit.h, fps, duration: dur } : { W: box.w, H: box.h, fps, duration: dur };
-      const head = [
-        isImage ? `trim=duration=${n(shown)}` : `trim=start=${n(c.in)}:end=${n(c.out + tail * c.speed)}`,
-        `setpts=(PTS-STARTPTS)/${n(c.speed)}`,
-      ];
-      // Untransformed clips fill the canvas per their fit mode (fit / fill / blur).
-      if (!tf) {
-        filters.push(`[${idx}:v]${head.join(",")}[r${vi}in]`);
-        filters.push(reframeGraph(c, media, box.w, box.h, gen ? "fill" : clipFit(c, p.settings), `r${vi}in`, `r${vi}`));
+      // Source stream: optional stabilising and AI background mask, then timing
+      // (speed / ramp / freeze / reverse) and green-screen key.
+      let src = `${idx}:v`;
+      if (c.stabilize && !gen) {
+        filters.push(`[${src}]deshake,crop=trunc(iw*0.94/2)*2:trunc(ih*0.94/2)*2[st${vi}]`);
+        src = `st${vi}`;
       }
+      if (c.bgMask && !gen && !isImage) {
+        const mi = addInput(c.bgMask.path, false, 0);
+        filters.push(`[${src}]format=yuva420p[bs${vi}]`);
+        filters.push(`[${mi}:v]setpts=PTS-STARTPTS+${n(c.bgMask.start)}/TB,format=gray[bm${vi}]`);
+        filters.push(`[bm${vi}][bs${vi}]scale2ref[bmk${vi}][bsr${vi}]`);
+        filters.push(`[bsr${vi}][bmk${vi}]alphamerge[ba${vi}]`);
+        src = `ba${vi}`;
+      }
+      const head = [
+        ...timingFilters(c, isImage, shown, tail),
+        ...(c.chroma ? ["format=yuva420p", chromaFilter(c.chroma)] : []),
+      ];
+      filters.push(`[${src}]${head.join(",")}[h${vi}]`);
+      // Untransformed clips fill the canvas per their fit mode (fit / fill / blur).
+      if (!tf) filters.push(reframeGraph(c, media, box.w, box.h, gen ? "fill" : clipFit(c, p.settings), `h${vi}`, `r${vi}`));
       const chain = [
-        ...(tf ? head : []),
         tf ? `scale=${fit.w}:${fit.h}` : "",
         "setsar=1",
         `fps=${fps}`,
         ...(c.effects ?? []).map((e) => effectById(e.id)?.filter(e.amount, ctx)).filter((x): x is string => !!x),
+        c.lut ? lutFilter(c.lut, `lut${vi}`) : "",
         gen?.category === "overlay" ? "format=rgba" : "",
         "format=yuva420p",
-        maskFilter(c.mask) ?? "",
+        maskFilter(c.mask, c.feather) ?? "",
         ...transitionFilters(c.transIn, c.transOut, dur, ctx),
         ...(keys ? keyframeFilters(keys, fit) : tf ? transformFilters(tf) : []),
         `setpts=PTS+${n(c.start)}/TB`,
       ].filter(Boolean);
-      filters.push(`[${tf ? `${idx}:v` : `r${vi}`}]${chain.join(",")}[v${vi}]`);
+      filters.push(`[${tf ? `h${vi}` : `r${vi}`}]${chain.join(",")}[v${vi}]`);
       const pos = slideOverlay(c.transIn, c.start);
       const tv = `(t-${n(c.start)})`;
       const boxCentre = !tf && c.box ? { x: c.box.x + c.box.w / 2, y: c.box.y + c.box.h / 2 } : { x: 0.5, y: 0.5 };
@@ -168,7 +186,7 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
       );
       last = `o${vi}`;
       vi++;
-      if (asset.hasAudio && !track.muted && !isImage) audioClips.push({ clip: c, input: idx, role: "voice" });
+      if (asset.hasAudio && !track.muted && !isImage && !silentTiming(c)) audioClips.push({ clip: c, input: idx, role: "voice" });
     });
   }
 
@@ -236,6 +254,7 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
     const chain = [
       `atrim=start=${n(c.in)}:end=${n(c.out)}`,
       "asetpts=PTS-STARTPTS",
+      c.reverse ? "areverse" : "",
       ...atempoChain(c.speed),
       ...(c.denoise ? VOICE_CLEANUP : []),
       `volume=${n(c.volume)}`,
@@ -265,6 +284,17 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
   }
 
   const q = QUALITY[opts.quality];
+  const fmt = opts.format ?? "mp4";
+  if (fmt === "gif") {
+    filters.push(`[vout]fps=${Math.min(15, fps)},split[ga][gb];[ga]palettegen=stats_mode=diff[gp];[gb][gp]paletteuse=dither=bayer:bayer_scale=4[vgif]`, `[aout]atrim=duration=${n(total)},anullsink`);
+    args.push("-filter_complex", filters.join(";"), "-map", "[vgif]", "-loop", "0", "-t", n(total), opts.outputPath);
+    return { args, files, duration: total };
+  }
+  const video =
+    fmt === "webm"
+      ? ["-c:v", "libvpx-vp9", "-crf", String(q.crf + 12), "-b:v", "0", "-row-mt", "1", "-deadline", opts.quality === "high" ? "good" : "realtime", "-pix_fmt", "yuv420p"]
+      : ["-c:v", "libx264", "-preset", q.preset, "-crf", String(q.crf), "-pix_fmt", "yuv420p"];
+  const audio = fmt === "webm" ? ["-c:a", "libopus", "-b:a", "160k"] : ["-c:a", "aac", "-b:a", "192k"];
   args.push(
     "-filter_complex",
     filters.join(";"),
@@ -272,24 +302,13 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
     "[vout]",
     "-map",
     "[aout]",
-    "-c:v",
-    "libx264",
-    "-preset",
-    q.preset,
-    "-crf",
-    String(q.crf),
-    "-pix_fmt",
-    "yuv420p",
+    ...video,
     "-r",
     String(fps),
-    "-c:a",
-    "aac",
-    "-b:a",
-    "192k",
+    ...audio,
     "-t",
     n(total),
-    "-movflags",
-    "+faststart",
+    ...(fmt === "webm" ? [] : ["-movflags", "+faststart"]),
     opts.outputPath
   );
   return { args, files, duration: total };
@@ -346,4 +365,17 @@ export function keyframeFilters(keys: Keyframe[], fit: { w: number; h: number })
 export function parseProgress(line: string): number | null {
   const m = /^out_time_(?:ms|us)=(\d+)/.exec(line.trim());
   return m ? Number(m[1]) / 1e6 : null;
+}
+
+/** Green-screen key (FFmpeg chromakey on YUV; similarity/blend 0..1). */
+export function chromaFilter(k: { color: string; similarity: number; blend: number }): string {
+  return `chromakey=color=0x${k.color.replace("#", "")}:similarity=${n(Math.max(0.01, k.similarity))}:blend=${n(k.blend)}`;
+}
+
+/** 3D LUT grade, mixed with the original by `amount`. */
+export function lutFilter(l: { path: string; amount: number }, id = "lut"): string {
+  const file = `lut3d=file='${escapeFilterValue(l.path)}'`;
+  if (l.amount >= 0.999) return file;
+  // Mix: split, grade one copy, blend back.
+  return `split[${id}o][${id}g];[${id}g]${file}[${id}r];[${id}o][${id}r]blend=all_mode=normal:all_opacity=${n(l.amount)}`;
 }
