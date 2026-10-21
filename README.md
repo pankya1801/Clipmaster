@@ -41,10 +41,17 @@ Many popular editors keep auto-captions, effects or watermark-free export behind
 | **32 effects** | Color grading (cinematic teal & orange, vintage, noir, warm/cool…), stylize (vignette, film grain, glitch, RGB split, pixelate…) and motion (Ken Burns, slow zoom, punch-in, camera shake). |
 | **11 transitions** | Cross dissolve, fade, flash, four slides, zoom pop, blur in, fade out, dip to white. |
 | **✨ Auto Edit** | One-click presets (Talking head, Vlog, Podcast clip, Music montage). Removes silences and **filler words** ("um", "uh", stutters), hides jump cuts with punch-in zooms, adds **auto B-roll** from your other clips, **makes a Short** from the best 30–60 seconds, adds captions and a look. *Music montage* cuts your clips to the beat. |
-| **🎨 Elements** | 35 stickers (emoji, arrows, badges) that pop in, 10 animated backgrounds, 7 overlays (light leak, bokeh, confetti, snow, sparkles, film dust, VHS) and 9 intro & outro templates. |
-| **⭕ Shapes & split screen** | Rounded or circle clips, and split-screen layouts (top/bottom, left/right, thirds, card). |
+| **🎨 Elements** | 35 stickers (emoji, arrows, badges) that pop in, 10 animated backgrounds, 8 overlays (light leak, spotlight, bokeh, confetti, snow, sparkles, film dust, VHS) and 9 intro & outro templates. |
+| **⭕ Shapes & split screen** | Rounded or circle clips with soft (feathered) edges, and split-screen layouts (top/bottom, left/right, thirds, card). |
 | **Audio** | Per-clip volume (0–200%), fades, speed 0.25×–4× with pitch-correct audio, one-click **voice clean-up** (noise reduction), **auto-ducking** of music under speech, and loudness normalization to −14 LUFS for social media. |
-| **Export** | MP4 (H.264/AAC) with progress and cancel. No watermark, no limits. |
+| **✂ Background removal** | Cut out the person in any video, no green screen needed (runs offline on your computer). Classic **chroma key** too. |
+| **⏩ Speed ramps** | Montage, Hero, Bullet, Flash in/out and Jump presets, plus **freeze frame** and **reverse**. |
+| **🎨 Look** | Import **.cube LUTs** with a strength slider, and one-click **stabilization** for shaky footage. |
+| **🎯 Motion tracking** | Stickers and overlays follow a moving object. |
+| **📝 Edit by text** | Click words in the transcript and cut them — the video is cut too. Captions can be **translated to English**. |
+| **🗣 Voice & sounds** | **Text to speech** with your system voices, 15 sound effects and 3 royalty-free beats, and **beat markers** that clips snap to. |
+| **📦 Shareable templates** | Save an edit as a `.cmtemplate` file (no media inside) and reuse it with new clips. |
+| **Export** | MP4, MOV, WebM or **GIF**, with one-click presets (TikTok/Reels, YouTube 4K, web, GIF). No watermark, no limits. |
 | **Safe** | Project files (`.clipmaster`), autosave and crash recovery. |
 
 ## Screenshots
@@ -107,10 +114,9 @@ The preview plays your media directly and approximates effects with CSS. Export 
 
 ## Roadmap
 
-- Stickers, overlays and LUT import
-- Background removal
-- Speed ramps and freeze frames
-- Templates you can share
+- Background removal preview in the editor (it is applied on export today)
+- Curve editor for custom speed ramps
+- More voices and languages for text to speech
 
 ## Contributing
 

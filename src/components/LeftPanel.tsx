@@ -10,20 +10,23 @@ import { useEditor } from "../store";
 import { GENERATORS, INTROS, STICKERS } from "../core/visuals";
 import { stickerThumb } from "../lib/stickers";
 import previewImage from "../assets/preview.jpg";
+import { SOUNDS } from "../core/audiolib";
+import type { ShareTemplate } from "../core/sharing";
+import { addMarkerAtPlayhead, addSound, clearMarkers, deleteWords, detectBeatMarkers, openTemplate, saveAsTemplate, textToSpeech, applyShareTemplate } from "../lib/pro";
 
 // Effect thumbnails pre-rendered with the real export filters (npm run previews).
 const FX_THUMBS = import.meta.glob("../assets/fx/*.jpg", { eager: true, import: "default" }) as Record<string, string>;
 const fxThumb = (id: string) => FX_THUMBS[`../assets/fx/${id}.jpg`] ?? previewImage;
 import { formatTime } from "./Preview";
 
-type Tab = "media" | "text" | "elements" | "effects" | "transitions" | "captions";
+type Tab = "media" | "audio" | "text" | "elements" | "effects" | "transitions" | "captions";
 
 export function LeftPanel() {
   const [tab, setTab] = useState<Tab>("media");
   return (
     <div className="panel">
       <div className="tabs">
-        {(["media", "text", "elements", "effects", "transitions", "captions"] as Tab[]).map((t) => (
+        {(["media", "audio", "text", "elements", "effects", "transitions", "captions"] as Tab[]).map((t) => (
           <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
             {t[0].toUpperCase() + t.slice(1)}
           </button>
@@ -31,6 +34,7 @@ export function LeftPanel() {
       </div>
       <div className="panel-body" key={tab}>
         {tab === "media" && <MediaTab />}
+        {tab === "audio" && <AudioTab />}
         {tab === "text" && <TextTab />}
         {tab === "elements" && <ElementsTab />}
         {tab === "effects" && <EffectsTab />}
@@ -69,6 +73,140 @@ function MediaTab() {
             <div className="label">{a.name}</div>
           </div>
         ))}
+      </div>
+      <TemplatesBox />
+    </>
+  );
+}
+
+/** Run an async action with a busy label; show the result as a toast. */
+function useRunner() {
+  const [busy, setBusy] = useState<string | null>(null);
+  const run = async (label: string, fn: (progress: (m: string) => void) => Promise<string> | string) => {
+    setBusy(label);
+    try {
+      const msg = await fn(setBusy);
+      if (msg) notify(msg);
+    } catch (e) {
+      notify(errorText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return { busy, run };
+}
+
+function TemplatesBox() {
+  const assets = useEditor((s) => s.project.assets);
+  const [tpl, setTpl] = useState<ShareTemplate | null>(null);
+  const [picks, setPicks] = useState<Record<string, string>>({});
+  const { busy, run } = useRunner();
+  return (
+    <>
+      <div className="section-title">Templates</div>
+      <p className="muted small">Save this edit's cuts, effects, text and timing as a shareable file — then reuse it with new clips.</p>
+      <div className="row">
+        <button className="grow" disabled={!!busy} onClick={() => run("Saving…", saveAsTemplate)}>💾 Save as template</button>
+        <button className="grow" disabled={!!busy} onClick={() => run("", async () => { const t = await openTemplate(); if (t) { setTpl(t); setPicks({}); } return ""; })}>📂 Use template</button>
+      </div>
+      {tpl && (
+        <div className="fx-item">
+          <b>{tpl.name}</b>
+          {tpl.slots.map((slot) => (
+            <label key={slot.id} className="field">
+              <span>{slot.label} <b>{slot.needs ? `${slot.needs.toFixed(1)}s` : ""}</b></span>
+              <select value={picks[slot.id] ?? ""} onChange={(e) => setPicks({ ...picks, [slot.id]: e.target.value })}>
+                <option value="">— pick {slot.kind} —</option>
+                {Object.values(assets).filter((a) => a.kind === slot.kind && !a.id.startsWith("stk_")).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </label>
+          ))}
+          <div className="row">
+            <button onClick={() => setTpl(null)}>Cancel</button>
+            <button className="primary grow" onClick={() => run("", () => { const m = applyShareTemplate(tpl, picks); setTpl(null); return m; })}>Apply template</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function AudioTab() {
+  const markers = useEditor((s) => s.project.markers ?? []);
+  const { busy, run } = useRunner();
+  const [text, setText] = useState("");
+  const [voice, setVoice] = useState("");
+  const [rate, setRate] = useState(175);
+  return (
+    <>
+      <div className="section-title">Text to speech</div>
+      <textarea rows={3} placeholder="Type a voiceover…" value={text} onChange={(e) => setText(e.target.value)} />
+      <div className="row">
+        <input className="grow" placeholder="Voice (optional, e.g. Samantha)" value={voice} onChange={(e) => setVoice(e.target.value)} />
+      </div>
+      <label className="field">
+        <span>Speed<b>{rate} wpm</b></span>
+        <input type="range" min={110} max={260} step={5} value={rate} onChange={(e) => setRate(+e.target.value)} />
+      </label>
+      <button className="primary" disabled={!!busy || !text.trim()} onClick={() => run("Speaking…", () => textToSpeech(text, voice, rate))}>
+        {busy === "Speaking…" ? busy : "🗣 Add voiceover"}
+      </button>
+      <p className="muted small">Uses your computer's built-in voices (offline).</p>
+      <div className="section-title">Beat markers · {markers.length}</div>
+      <div className="row">
+        <button className="grow" disabled={!!busy} onClick={() => run("Listening…", detectBeatMarkers)} title="Mark every beat of the music track; clips snap to the markers">🥁 Mark beats</button>
+        <button onClick={addMarkerAtPlayhead} title="Add a marker at the playhead (M)">＋</button>
+        <button onClick={clearMarkers} disabled={!markers.length}>Clear</button>
+      </div>
+      {(["sfx", "music"] as const).map((cat) => (
+        <div key={cat}>
+          <div className="section-title">{cat === "sfx" ? "Sound effects" : "Royalty-free beats"}</div>
+          <div className="grid" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+            {SOUNDS.filter((x) => x.category === cat).map((x) => (
+              <button key={x.id} className="card" disabled={!!busy} onClick={() => run("Adding…", () => addSound(x.id))} title="Add at the playhead">
+                <div className="thumb" style={{ height: 34 }}><span>{cat === "sfx" ? "🔊" : "🎵"}</span><span className="badge">{x.duration.toFixed(1)}s</span></div>
+                <div className="label">{x.name}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** Text-based editing: click words to select, delete to cut the video. */
+function Transcript() {
+  const captions = useEditor((s) => s.project.captions);
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [anchor, setAnchor] = useState<number | null>(null);
+  const { run } = useRunner();
+  if (!captions.length) return null;
+  const click = (i: number, shift: boolean) => {
+    if (shift && anchor != null) {
+      const [a, b] = [Math.min(anchor, i), Math.max(anchor, i)];
+      setSel(new Set(Array.from({ length: b - a + 1 }, (_, k) => a + k)));
+    } else {
+      const next = new Set(sel);
+      next.has(i) ? next.delete(i) : next.add(i);
+      setSel(next);
+      setAnchor(i);
+    }
+  };
+  return (
+    <>
+      <div className="section-title">Edit by text</div>
+      <p className="muted small">Click words (shift-click for a range), then cut them — the video is cut too. Double-click a word to jump there.</p>
+      <div className="transcript">
+        {captions.map((w, i) => (
+          <span key={i} className={sel.has(i) ? "w sel" : "w"} onClick={(e) => click(i, e.shiftKey)} onDoubleClick={() => useEditor.getState().setPlayhead(w.start)}>
+            {w.text}{" "}
+          </span>
+        ))}
+      </div>
+      <div className="row">
+        <button className="grow" disabled={!sel.size} onClick={() => run("", async () => { const m = await deleteWords([...sel]); setSel(new Set()); return m; })}>✂ Cut {sel.size || ""} selected word{sel.size === 1 ? "" : "s"}</button>
+        <button disabled={!sel.size} onClick={() => setSel(new Set())}>Clear</button>
       </div>
     </>
   );
@@ -266,6 +404,23 @@ function CaptionsTab() {
         <button className="grow" onClick={exportSrt} disabled={!captions.length}>Export SRT</button>
         <button onClick={() => commit((p) => ({ ...p, captions: [] }))} disabled={!captions.length}>Clear</button>
       </div>
+      <button
+        disabled={!!busy}
+        title="Transcribe any language and caption it in English (uses a multilingual model)"
+        onClick={async () => {
+          try {
+            const n = await autoCaptions(setBusy, undefined, true);
+            notify(`Added ${n} English caption words`);
+          } catch (e) {
+            notify(errorText(e));
+          } finally {
+            setBusy(null);
+          }
+        }}
+      >
+        🌐 Auto captions translated to English
+      </button>
+      <Transcript />
       <button
         disabled={!captions.length}
         title="Punch-in and push-in zooms on sentence starts, exclamations and key words"

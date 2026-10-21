@@ -253,6 +253,7 @@ pub async fn transcribe(
     model: String,
     language: String,
     prompt: Option<String>,
+    translate: Option<bool>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let tmp = std::env::temp_dir();
@@ -277,6 +278,9 @@ pub async fn transcribe(
         cmd.args(["-osrt", "-ml", "1", "-sow", "-np", "-l", if language.is_empty() { "auto" } else { &language }]);
         if let Some(p) = prompt.filter(|p| !p.trim().is_empty()) {
             cmd.arg("--prompt").arg(p);
+        }
+        if translate.unwrap_or(false) {
+            cmd.arg("-tr");
         }
         cmd.arg("-of").arg(&base);
         let out = cmd.output().map_err(|e| format!("Could not run whisper ({e}). Check the path in Settings."));
@@ -402,6 +406,88 @@ pub fn save_sticker(app: AppHandle, name: String, png_base64: String) -> Result<
     let bytes = base64::engine::general_purpose::STANDARD.decode(png_base64).map_err(|e| e.to_string())?;
     std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
     Ok(path.to_string_lossy().into_owned())
+}
+
+
+/// Run FFmpeg with the given arguments (sound library, GIF export, mask
+/// encoding). Returns stderr on failure.
+#[tauri::command]
+pub async fn run_ffmpeg(args: Vec<String>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let out = command("ffmpeg").args(&args).output().map_err(|e| e.to_string())?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            Err(String::from_utf8_lossy(&out.stderr).lines().last().unwrap_or("ffmpeg failed").to_string())
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Write base64 data to a file in the temp folder; returns its path.
+#[tauri::command]
+pub fn write_temp_file(name: String, data_base64: String) -> Result<String, String> {
+    let safe: String = name.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')).collect();
+    if safe.is_empty() || safe.starts_with('.') {
+        return Err("Invalid file name".into());
+    }
+    let path = std::env::temp_dir().join("clipmaster").join(safe);
+    std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data_base64).map_err(|e| e.to_string())?;
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// Text to speech with the system voice (macOS `say`, Windows SAPI, Linux
+/// espeak-ng/espeak), saved as a WAV at `out`.
+#[tauri::command]
+pub async fn speak(text: String, voice: Option<String>, rate: Option<i32>, out: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let tmp = std::env::temp_dir().join("clipmaster_tts.txt");
+        std::fs::write(&tmp, &text).map_err(|e| e.to_string())?;
+        let status = if cfg!(target_os = "macos") {
+            let aiff = format!("{out}.aiff");
+            let mut c = Command::new("say");
+            c.arg("-f").arg(&tmp).arg("-o").arg(&aiff);
+            if let Some(v) = voice.as_ref().filter(|v| !v.is_empty()) { c.arg("-v").arg(v); }
+            if let Some(r) = rate { c.arg("-r").arg(r.to_string()); }
+            let s = c.status().map_err(|e| e.to_string())?;
+            if s.success() {
+                let ok = command("ffmpeg").args(["-v", "error", "-y", "-i", &aiff, "-ar", "48000", &out]).status().map_err(|e| e.to_string())?;
+                let _ = std::fs::remove_file(&aiff);
+                ok
+            } else { s }
+        } else if cfg!(windows) {
+            let script = format!(
+                "Add-Type -AssemblyName System.Speech; $s=New-Object System.Speech.Synthesis.SpeechSynthesizer; {} $s.Rate={}; $s.SetOutputToWaveFile('{}'); $s.Speak([IO.File]::ReadAllText('{}')); $s.Dispose()",
+                voice.as_ref().filter(|v| !v.is_empty()).map(|v| format!("$s.SelectVoice('{}');", v.replace('\'', ""))).unwrap_or_default(),
+                rate.map(|r| ((r - 175) / 20).clamp(-10, 10)).unwrap_or(0),
+                out.replace('\'', "''"),
+                tmp.to_string_lossy().replace('\'', "''")
+            );
+            let mut c = Command::new("powershell");
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                c.creation_flags(0x0800_0000);
+            }
+            c.args(["-NoProfile", "-Command", &script]).status().map_err(|e| e.to_string())?
+        } else {
+            let run = |bin: &str| {
+                let mut c = Command::new(bin);
+                c.arg("-f").arg(&tmp).arg("-w").arg(&out);
+                if let Some(v) = voice.as_ref().filter(|v| !v.is_empty()) { c.arg("-v").arg(v); }
+                if let Some(r) = rate { c.arg("-s").arg(r.to_string()); }
+                c.status()
+            };
+            run("espeak-ng").or_else(|_| run("espeak")).map_err(|_| "Install espeak-ng for text to speech".to_string())?
+        };
+        let _ = std::fs::remove_file(&tmp);
+        if status.success() { Ok(out) } else { Err("Text to speech failed".into()) }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[cfg(test)]

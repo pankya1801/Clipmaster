@@ -216,10 +216,10 @@ function round(p: FocusPoint): FocusPoint {
 }
 
 /** Frame size for analysis: ~64 px on the long side, keeping the aspect ratio. */
-export function sampleSize(aw: number | undefined, ah: number | undefined) {
+export function sampleSize(aw: number | undefined, ah: number | undefined, long = 64) {
   const w0 = aw || 16;
   const h0 = ah || 9;
-  const k = 64 / Math.max(w0, h0);
+  const k = long / Math.max(w0, h0);
   return { width: Math.max(8, Math.round((w0 * k) / 2) * 2), height: Math.max(8, Math.round((h0 * k) / 2) * 2) };
 }
 

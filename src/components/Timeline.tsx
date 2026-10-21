@@ -51,15 +51,15 @@ export function Timeline() {
     if (d.kind === "move") {
       const raw = t - d.grabOffset;
       const dur = clipDuration(c);
-      let start = snapTime(d.base, raw, threshold, [playhead], d.id);
-      const endSnap = snapTime(d.base, raw + dur, threshold, [playhead], d.id);
+      let start = snapTime(d.base, raw, threshold, [playhead, ...(d.base.markers ?? [])], d.id);
+      const endSnap = snapTime(d.base, raw + dur, threshold, [playhead, ...(d.base.markers ?? [])], d.id);
       if (start === raw && endSnap !== raw + dur) start = endSnap - dur;
       const track = trackAt(e.clientY) ?? d.base.tracks.find((tr) => tr.id === c.trackId)!;
       replace(moveClip(d.base, d.id, track.id, start));
     } else if (d.kind === "trim-l") {
-      replace(trimStart(d.base, d.id, snapTime(d.base, t, threshold, [playhead], d.id)));
+      replace(trimStart(d.base, d.id, snapTime(d.base, t, threshold, [playhead, ...(d.base.markers ?? [])], d.id)));
     } else {
-      replace(trimEnd(d.base, d.id, snapTime(d.base, t, threshold, [playhead], d.id)));
+      replace(trimEnd(d.base, d.id, snapTime(d.base, t, threshold, [playhead, ...(d.base.markers ?? [])], d.id)));
     }
   };
 
@@ -210,6 +210,9 @@ export function Timeline() {
               </div>
             ))}
           </div>
+          {(project.markers ?? []).map((m, i) => (
+            <div key={i} className="tl-marker" style={{ left: m * zoom }} title={`Marker ${formatMarker(m)} (clips snap here)`} />
+          ))}
           <div className="playhead" style={{ left: playhead * zoom }} />
           {/* clip end markers help snapping be visible */}
           {total > 0 && <div style={{ position: "absolute", top: 24, bottom: 0, left: total * zoom, borderLeft: "1px dashed #ffffff22" }} />}
@@ -225,3 +228,7 @@ function fmtTick(t: number) {
   return m ? `${m}:${String(Math.floor(s)).padStart(2, "0")}` : `${Number(s.toFixed(1))}s`;
 }
 
+
+function formatMarker(t: number) {
+  return `${t.toFixed(2)}s`;
+}

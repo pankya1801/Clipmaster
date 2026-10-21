@@ -1,5 +1,6 @@
 import type { FitMode, FocusPoint } from "./reframe";
 import type { Box, MaskShape } from "./visuals";
+import type { RampPoint } from "./speed";
 
 export type AssetKind = "video" | "audio" | "image";
 
@@ -60,6 +61,22 @@ export interface MediaClip extends ClipBase {
   mask?: MaskShape;
   /** Fill only this region of the frame (split-screen layouts). */
   box?: Box;
+  /** Soft edge for the shape mask, 0..1. */
+  feather?: number;
+  /** Speed ramp (curve speed). The clip keeps its length; its own sound is muted. */
+  ramp?: RampPoint[];
+  /** Hold the frame at `in` for the clip's length. */
+  freeze?: boolean;
+  /** Play backwards. */
+  reverse?: boolean;
+  /** Smooth out camera shake. */
+  stabilize?: boolean;
+  /** Green-screen key. */
+  chroma?: { color: string; similarity: number; blend: number };
+  /** 3D LUT colour grade (.cube file). */
+  lut?: { path: string; name: string; amount: number };
+  /** AI background removal: a greyscale mask video covering source time from `start`. */
+  bgMask?: { path: string; start: number; fps: number };
 }
 
 export interface Keyframe extends Transform {
@@ -143,6 +160,8 @@ export interface Project {
   /** Word-timed captions on the timeline. */
   captions: CaptionWord[];
   captionSettings: CaptionSettings;
+  /** Timeline markers (seconds), e.g. detected beats. Clips snap to them. */
+  markers?: number[];
 }
 
 export const ASPECT_PRESETS: { label: string; width: number; height: number }[] = [

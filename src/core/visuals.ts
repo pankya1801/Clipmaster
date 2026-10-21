@@ -157,6 +157,17 @@ export const GENERATORS: Generator[] = [
       `radial-gradient(ellipse at ${20 + 60 * (0.5 + 0.5 * Math.sin(t * 0.6))}% ${30 + 20 * Math.cos(t * 0.4)}%, rgba(255,140,40,.55), rgba(255,60,20,.25) 35%, transparent 65%)`,
     style: { mixBlendMode: "screen" },
   },
+  {
+    id: "ov-spotlight",
+    name: "Spotlight",
+    category: "overlay",
+    source: (W, H, fps, dur) => {
+      const r = Math.round(Math.min(W, H) * 0.3);
+      const soft = Math.round(Math.min(W, H) * 0.14);
+      return `color=c=black@0:s=${W}x${H}:r=${fps}:d=${n(dur)},format=rgba,geq=r=0:g=0:b=0:a='190*clip((hypot(X-W/2\\,Y-H/2)-${r})/${soft}\\,0\\,1)'`;
+    },
+    css: () => "radial-gradient(circle closest-side, transparent 60%, rgba(0,0,0,.75) 90%)",
+  },
   overlay("ov-bokeh", "Bokeh lights", (w, h) => [...particleBoxes(BOKEH, w, h), "boxblur=6:2"], (t) => particleCss(BOKEH, t, true), { mixBlendMode: "screen" }, 4, "white"),
   overlay("ov-confetti", "Confetti", (w, h) => particleBoxes(CONFETTI, w, h), (t) => particleCss(CONFETTI, t)),
   overlay("ov-snow", "Snow", (w, h) => particleBoxes(SNOW, w, h), (t) => particleCss(SNOW, t)),
@@ -237,15 +248,17 @@ export const MASKS: { id: MaskShape | undefined; label: string }[] = [
   { id: "circle", label: "Circle" },
 ];
 
-/** geq alpha mask (works on any frame size; 1.5px anti-aliased edge). */
-export function maskFilter(shape: MaskShape | undefined): string | null {
+/** geq alpha mask (works on any frame size; anti-aliased, optionally feathered edge). */
+export function maskFilter(shape: MaskShape | undefined, feather = 0): string | null {
   const pass = "lum='lum(X\\,Y)':cb='cb(X\\,Y)':cr='cr(X\\,Y)'";
-  if (shape === "circle") return `geq=${pass}:a='alpha(X\\,Y)*clip((min(W\\,H)/2-hypot(X-W/2\\,Y-H/2))*1.5\\,0\\,1)'`;
+  // Edge ramp: 1.5px when hard, up to 15% of the short side when feathered.
+  const k = feather > 0 ? `/max(1\\,min(W\\,H)*${(feather * 0.15).toFixed(4)})` : "*1.5";
+  if (shape === "circle") return `geq=${pass}:a='alpha(X\\,Y)*clip((min(W\\,H)/2-hypot(X-W/2\\,Y-H/2))${k}\\,0\\,1)'`;
   if (shape === "rounded") {
     const r = "(min(W\\,H)*0.08)";
     const dx = `max(abs(X-W/2)-(W/2-${r})\\,0)`;
     const dy = `max(abs(Y-H/2)-(H/2-${r})\\,0)`;
-    return `geq=${pass}:a='alpha(X\\,Y)*clip((${r}-hypot(${dx}\\,${dy}))*1.5\\,0\\,1)'`;
+    return `geq=${pass}:a='alpha(X\\,Y)*clip((${r}-hypot(${dx}\\,${dy}))${k}\\,0\\,1)'`;
   }
   return null;
 }

@@ -118,7 +118,12 @@ describe.skipIf(!hasFfmpeg)("real ffmpeg: generated visuals, masks and layouts",
         // Overlays are see-through: most of the frame is still the red clip.
         let redPx = 0;
         for (let y = 0; y < H; y += 8) for (let x = 0; x < W; x += 8) { const c = pixel(f, W, x, y); if (c[0] > 120 && c[2] < 140) redPx++; }
-        expect(redPx / ((H / 8) * (W / 8))).toBeGreaterThan(0.5);
+        if (g.id === "ov-spotlight") {
+          // Spotlight darkens the edges but keeps the centre clear.
+          const c = pixel(f, W, W / 2, H / 2);
+          expect(c[0]).toBeGreaterThan(150);
+          expect(pixel(f, W, 2, 2)[0]).toBeLessThan(c[0] - 60);
+        } else expect(redPx / ((H / 8) * (W / 8))).toBeGreaterThan(0.5);
       }
     });
   }

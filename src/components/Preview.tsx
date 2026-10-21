@@ -1,3 +1,4 @@
+import { sourceTimeAt } from "../core/speed";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { captionTemplate, groupCaptionLines } from "../core/captions";
 import { effectsCss, transitionPreview } from "../core/effects";
@@ -55,9 +56,16 @@ function gainAt(c: MediaClip, t: number) {
 }
 
 function syncMedia(el: HTMLMediaElement, c: MediaClip, t: number, playing: boolean, gain: number) {
-  const desired = c.in + (t - c.start) * c.speed;
-  el.playbackRate = c.speed;
+  const desired = sourceTimeAt(c, t - c.start);
   el.volume = gain;
+  if (c.freeze || c.reverse || c.ramp?.length) {
+    // Can't be played natively: step through frames by seeking (muted, as on export).
+    el.volume = 0;
+    if (!el.paused) el.pause();
+    if (Math.abs(el.currentTime - desired) > 0.04) el.currentTime = desired;
+    return;
+  }
+  el.playbackRate = c.speed;
   if (playing) {
     if (Math.abs(el.currentTime - desired) > 0.3) el.currentTime = desired;
     if (el.paused) el.play().catch(() => {});
@@ -220,7 +228,7 @@ export function Preview() {
             const bw = lb ? lb.w * W : W;
             const bh = lb ? lb.h * H : H;
             const boxStyle: React.CSSProperties = lb ? { left: `${lb.x * 100}%`, top: `${lb.y * 100}%`, width: `${lb.w * 100}%`, height: `${lb.h * 100}%` } : {};
-            const pos = objectPosition(asset.width, asset.height, bw, bh, focusAt(c.focus, c.in + (playhead - c.start) * c.speed));
+            const pos = objectPosition(asset.width, asset.height, bw, bh, focusAt(c.focus, sourceTimeAt(c, playhead - c.start)));
             const fitStyle: React.CSSProperties = tf ? {} : mode === "fill" ? { objectFit: "cover", objectPosition: pos } : { objectFit: "contain" };
             const fitted = fittedSize(asset.width, asset.height, W, H);
             const clipPath = maskCss(c.mask, (tf ? fitted.w : bw) * scale, (tf ? fitted.h : bh) * scale);

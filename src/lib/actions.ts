@@ -183,7 +183,7 @@ export function saveWhisperConfig(c: WhisperConfig) {
 }
 
 /** Transcribe every speech clip on the main track and place word-timed captions. */
-export async function autoCaptions(onProgress?: (msg: string) => void, prompt?: string): Promise<number> {
+export async function autoCaptions(onProgress?: (msg: string) => void, prompt?: string, translate = false): Promise<number> {
   const cfg = loadWhisperConfig();
   if (!isTauri) throw new Error("Auto captions need the desktop app.");
   let model = cfg.model;
@@ -206,7 +206,7 @@ export async function autoCaptions(onProgress?: (msg: string) => void, prompt?: 
     if (!asset?.hasAudio) continue;
     onProgress?.(`Transcribing clip ${i + 1} of ${clips.length}…`);
     const srt = await invoke<string>("transcribe", {
-      path: asset.path, start: c.in, end: c.out, whisperBin: cfg.bin, model, language, prompt: prompt ?? null,
+      path: asset.path, start: c.in, end: c.out, whisperBin: cfg.bin, model, language, prompt: prompt ?? null, translate,
     });
     for (const w of parseSrt(srt)) words.push({ text: w.text, start: c.start + w.start / c.speed, end: c.start + w.end / c.speed });
   }
