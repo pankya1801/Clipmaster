@@ -205,3 +205,4 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; }
 .transcript .w { cursor: pointer; border-radius: 3px; }
 .transcript .w:hover { background: #ffffff18; }
 .transcript .w.sel { background: #e5484d55; text-decoration: line-through; }
+.stock-grid .thumb { background-size: cover; background-position: center; }

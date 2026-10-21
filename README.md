@@ -50,6 +50,7 @@ Many popular editors keep auto-captions, effects or watermark-free export behind
 | **🎯 Motion tracking** | Stickers and overlays follow a moving object. |
 | **📝 Edit by text** | Click words in the transcript and cut them — the video is cut too. Captions can be **translated to English**. |
 | **🗣 Voice & sounds** | **Text to speech** with your system voices, 15 sound effects and 3 royalty-free beats, and **beat markers** that clips snap to. |
+| **🎞 Stock footage** | Search free **Pexels** and **Pixabay** videos and photos inside the app (bring your own free API key), add them in one click, or let **Auto stock B-roll** cover what you talk about. Credits are collected for your description. |
 | **📦 Shareable templates** | Save an edit as a `.cmtemplate` file (no media inside) and reuse it with new clips. |
 | **Export** | MP4, MOV, WebM or **GIF**, with one-click presets (TikTok/Reels, YouTube 4K, web, GIF). No watermark, no limits. |
 | **Safe** | Project files (`.clipmaster`), autosave and crash recovery. |

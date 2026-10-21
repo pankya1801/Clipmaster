@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_AUTO_EDIT } from "../core/autoedit";
 import { EFFECTS } from "../core/effects";
+import { loadStockKeys, saveStockKeys } from "../lib/stock";
 import { buildExportPlan, ExportFormat, ExportQuality } from "../core/ffmpeg";
 import { projectDuration } from "../core/project";
 import { AUTO_EDIT_PRESETS } from "../core/smartcut";
@@ -207,6 +208,7 @@ export function AutoEditDialog({ onClose }: { onClose: () => void }) {
       )}
       <label className="check"><input type="checkbox" checked={!!opts.autoZoom} onChange={(e) => set({ autoZoom: e.target.checked })} /> Auto zoom on key words (uses the transcript)</label>
       <label className="check" title="Uses media you imported but haven't put on the timeline"><input type="checkbox" checked={!!opts.broll} onChange={(e) => set({ broll: e.target.checked })} /> Auto B-roll: cut away to your other clips &amp; photos</label>
+      <label className="check" title="Needs a free Pexels or Pixabay key (Settings → Stock footage)"><input type="checkbox" checked={!!opts.stockBroll} onChange={(e) => set({ stockBroll: e.target.checked })} /> Stock B-roll: matching Pexels / Pixabay clips for what you say</label>
       <label className="check"><input type="checkbox" checked={!!opts.highlight} onChange={(e) => set({ highlight: e.target.checked })} /> Make a Short: keep only the best 30–60 seconds</label>
       <label className="check"><input type="checkbox" checked={!!opts.vertical} onChange={(e) => set({ vertical: e.target.checked })} /> Make it vertical (9:16) and follow the speaker</label>
       <label className="check"><input type="checkbox" checked={opts.duck} onChange={(e) => set({ duck: e.target.checked })} /> Duck background music under speech</label>
@@ -259,6 +261,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [downloading, setDownloading] = useState<{ name: string; pct: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [advanced, setAdvanced] = useState(!!(cfg.bin || cfg.model));
+  const [stock, setStock] = useState(loadStockKeys());
 
   const refresh = () => isTauri && invoke<WhisperModel[]>("whisper_models").then(setModels).catch(() => {});
   useEffect(() => {
@@ -297,6 +300,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Settings" onClose={onClose}>
       <div><b>FFmpeg</b><div className="muted small" style={{ userSelect: "text" }}>{ffmpeg}</div></div>
+      <div className="section-title">Stock footage</div>
+      <p className="muted small" style={{ margin: 0 }}>Free API keys: <span style={{ userSelect: "text" }}>pexels.com/api</span> and <span style={{ userSelect: "text" }}>pixabay.com/api/docs</span>. Keys stay on this computer.</p>
+      <label className="field"><span>Pexels API key</span><input type="password" value={stock.pexels} onChange={(e) => setStock({ ...stock, pexels: e.target.value.trim() })} placeholder="Paste key" /></label>
+      <label className="field"><span>Pixabay API key</span><input type="password" value={stock.pixabay} onChange={(e) => setStock({ ...stock, pixabay: e.target.value.trim() })} placeholder="Paste key" /></label>
       <div className="section-title">Auto captions</div>
       <p className="muted small" style={{ margin: 0 }}>Speech is transcribed on your computer with whisper.cpp. Your audio never leaves your device. Download one model once:</p>
       <div style={{ display: "grid", gap: 6 }}>
@@ -334,7 +341,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         </>
       )}
       <div className="row"><span className="grow" /><button onClick={onClose}>Cancel</button>
-        <button className="primary" onClick={() => { saveWhisperConfig(cfg); onClose(); }}>Save</button></div>
+        <button className="primary" onClick={() => { saveWhisperConfig(cfg); saveStockKeys(stock); onClose(); }}>Save</button></div>
     </Modal>
   );
 }

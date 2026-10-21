@@ -490,6 +490,93 @@ pub async fn speak(text: String, voice: Option<String>, rate: Option<i32>, out: 
     .map_err(|e| e.to_string())?
 }
 
+
+/// Hosts stock search and downloads may contact (Pexels, Pixabay and their CDNs).
+const STOCK_HOSTS: &[&str] = &["api.pexels.com", "videos.pexels.com", "images.pexels.com", "player.vimeo.com", "pixabay.com", "cdn.pixabay.com"];
+
+fn stock_host_ok(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else { return false };
+    let host = rest.split(['/', '?', ':']).next().unwrap_or("");
+    STOCK_HOSTS.iter().any(|h| host == *h || host.ends_with(&format!(".{h}")))
+}
+
+/// GET a stock search API (JSON) with optional headers (the API key).
+#[tauri::command]
+pub async fn stock_search(url: String, headers: std::collections::HashMap<String, String>) -> Result<String, String> {
+    if !stock_host_ok(&url) {
+        return Err("Not a stock provider URL".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut req = ureq::get(&url).timeout(std::time::Duration::from_secs(20));
+        for (k, v) in &headers {
+            req = req.set(k, v);
+        }
+        match req.call() {
+            Ok(r) => r.into_string().map_err(|e| e.to_string()),
+            Err(ureq::Error::Status(401 | 403, _)) => Err("The API key was refused. Check it in Settings → Stock.".into()),
+            Err(ureq::Error::Status(429, _)) => Err("Too many searches — the provider's free limit was reached. Try again in a bit.".into()),
+            Err(e) => Err(format!("Search failed: {e}")),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[derive(Clone, Serialize)]
+struct StockProgress {
+    name: String,
+    received: u64,
+    total: u64,
+}
+
+/// Download a stock file into the app's stock folder (reused if already there).
+#[tauri::command]
+pub async fn stock_download(app: AppHandle, url: String, name: String) -> Result<String, String> {
+    use tauri::Manager;
+    if !stock_host_ok(&url) {
+        return Err("Not a stock provider URL".into());
+    }
+    let safe: String = name.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')).collect();
+    if safe.is_empty() || safe.starts_with('.') {
+        return Err("Invalid file name".into());
+    }
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("stock");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let dest = dir.join(&safe);
+    if dest.exists() {
+        return Ok(dest.to_string_lossy().into_owned());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let resp = ureq::get(&url).call().map_err(|e| format!("Download failed: {e}"))?;
+        let total: u64 = resp.header("Content-Length").and_then(|v| v.parse().ok()).unwrap_or(0);
+        let part = dir.join(format!("{safe}.part"));
+        let mut file = std::fs::File::create(&part).map_err(|e| e.to_string())?;
+        let mut reader = resp.into_reader();
+        let mut buf = vec![0u8; 1 << 16];
+        let (mut received, mut last) = (0u64, 0u64);
+        loop {
+            let n = reader.read(&mut buf).map_err(|e| format!("Download interrupted: {e}"))?;
+            if n == 0 {
+                break;
+            }
+            std::io::Write::write_all(&mut file, &buf[..n]).map_err(|e| e.to_string())?;
+            received += n as u64;
+            if received - last > 1 << 19 {
+                last = received;
+                let _ = app.emit("stock-progress", StockProgress { name: safe.clone(), received, total });
+            }
+        }
+        if total > 0 && received != total {
+            let _ = std::fs::remove_file(&part);
+            return Err("Download incomplete, please try again".into());
+        }
+        std::fs::rename(&part, &dest).map_err(|e| e.to_string())?;
+        Ok(dest.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -498,6 +585,15 @@ mod tests {
         let path = std::env::temp_dir().join(name);
         let ok = command("ffmpeg").args(["-v", "error", "-y"]).args(args).arg(&path).status().ok()?.success();
         ok.then(|| path.to_string_lossy().into_owned())
+    }
+
+    #[test]
+    fn stock_hosts_are_allow_listed() {
+        assert!(stock_host_ok("https://api.pexels.com/videos/search?query=x"));
+        assert!(stock_host_ok("https://cdn.pixabay.com/video/1.mp4"));
+        assert!(!stock_host_ok("http://api.pexels.com/x"));
+        assert!(!stock_host_ok("https://evil.com/?https://api.pexels.com"));
+        assert!(!stock_host_ok("https://api.pexels.com.evil.com/x"));
     }
 
     #[test]

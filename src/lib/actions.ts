@@ -259,6 +259,8 @@ export type AutoEditRun = AutoEditOptions & {
   softFillers?: boolean;
   /** Cut away to your other clips/photos at natural pauses. */
   broll?: boolean;
+  /** Cover what is said with matching Pexels / Pixabay clips. */
+  stockBroll?: boolean;
   /** Keep only the best 30–60 seconds. */
   highlight?: boolean;
   /** Switch to 9:16 and reframe. */
@@ -316,6 +318,10 @@ export async function runAutoEdit(
     }
   }
   if (haveWords && opts.autoZoom) parts.push(autoZoom());
+  if (haveWords && opts.stockBroll) {
+    const { autoStockBroll } = await import("./stock");
+    parts.push(await autoStockBroll(onProgress).catch((e) => `Stock B-roll skipped: ${errorText(e)}`));
+  }
   if (!opts.captions && haveWords) S().commit((p) => ({ ...p, captions: [] }));
   if (opts.vertical) parts.push(await makeFormat(1080, 1920, "fill", onProgress));
   if (opts.broll) parts.push(addAutoBroll());
@@ -420,7 +426,7 @@ export function addAutoBroll(): string {
 // ---------- elements: stickers, backgrounds, overlays, intros ----------
 
 /** A video track above everything else at [at, at+d), creating one if needed. */
-function freeTopVideoTrack(p: Project, at: number, d: number): { project: Project; trackId: string } {
+export function freeTopVideoTrack(p: Project, at: number, d: number): { project: Project; trackId: string } {
   const top = p.tracks.find((t) => t.kind === "video");
   if (top && !clipsOnTrack(p, top.id).some((c) => c.start < at + d && clipEnd(c) > at)) return { project: p, trackId: top.id };
   const next = addTrack(p, "video");

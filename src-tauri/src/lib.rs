@@ -29,6 +29,8 @@ pub fn run() {
             media::run_ffmpeg,
             media::write_temp_file,
             media::speak,
+            media::stock_search,
+            media::stock_download,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Clipmaster");
