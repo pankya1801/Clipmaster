@@ -1,4 +1,5 @@
 import type { FitMode, FocusPoint } from "./reframe";
+import type { Box, MaskShape } from "./visuals";
 
 export type AssetKind = "video" | "audio" | "image";
 
@@ -55,6 +56,10 @@ export interface MediaClip extends ClipBase {
   fit?: FitMode;
   /** Where to centre the crop over time (Smart reframe), in source seconds. */
   focus?: FocusPoint[];
+  /** Cut the clip to a shape (rounded corners, circle). */
+  mask?: MaskShape;
+  /** Fill only this region of the frame (split-screen layouts). */
+  box?: Box;
 }
 
 export interface Keyframe extends Transform {

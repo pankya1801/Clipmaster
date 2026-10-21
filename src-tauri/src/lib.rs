@@ -12,6 +12,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             media::ffmpeg_status,
             media::sample_frames,
+            media::save_sticker,
             media::probe_media,
             media::thumbnail,
             media::export_video,

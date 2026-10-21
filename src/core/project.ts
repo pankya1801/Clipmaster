@@ -183,7 +183,8 @@ export function addText(p: Project, trackId: string, at: number, text = "Your te
       text: text === "Your text" ? preset.sample : text,
       x: preset.x,
       y: preset.y,
-      fontSize: Math.round(preset.size * p.settings.height),
+      // Presets are designed for landscape; size from the short side so titles fit 9:16.
+      fontSize: Math.round(preset.size * Math.min(p.settings.height, p.settings.width)),
       color: preset.color,
       accent: preset.accent,
       box: false,

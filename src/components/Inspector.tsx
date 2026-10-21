@@ -4,6 +4,7 @@ import { upsertKeyframe } from "../core/keyframes";
 import { TEXT_PRESETS } from "../core/textPresets";
 import { ASPECT_PRESETS, MediaClip, TextClip } from "../core/types";
 import { clipFit, FIT_MODES, focusAt, needsReframe } from "../core/reframe";
+import { GEN_PREFIX, LAYOUTS, MASKS } from "../core/visuals";
 import { useState } from "react";
 import { errorText, makeFormat, notify, smartReframe } from "../lib/actions";
 import { useEditor } from "../store";
@@ -255,6 +256,7 @@ function FrameControls({ clip }: { clip: MediaClip }) {
   const { commit } = useEditor.getState();
   const [busy, setBusy] = useState<string | null>(null);
   const mode = clipFit(clip, settings);
+  const generated = !!asset?.path.startsWith(GEN_PREFIX);
   const set = (patch: Partial<MediaClip>) => commit((p) => updateClip(p, clip.id, patch));
   const moved = !!clip.transform || !!clip.keyframes?.length;
   const src = clip.in + Math.max(0, playhead - clip.start) * clip.speed;
@@ -264,14 +266,31 @@ function FrameControls({ clip }: { clip: MediaClip }) {
       {!needsReframe(asset?.width, asset?.height, settings.width, settings.height) && (
         <p className="small muted" style={{ margin: 0 }}>This clip already matches the canvas shape.</p>
       )}
-      <div className="row" style={{ gap: 4 }}>
+      {!generated && <div className="row" style={{ gap: 4 }}>
         {FIT_MODES.map((m) => (
           <button key={m.id} className={mode === m.id ? "small primary" : "small"} title={m.hint} onClick={() => set({ fit: m.id, transform: undefined, keyframes: undefined })}>
             {m.label}
           </button>
         ))}
-      </div>
+      </div>}
       {moved && <p className="small muted" style={{ margin: 0 }}>Moved or resized clips keep their own size. Pick a mode above to reset.</p>}
+      <div className="small muted">Shape</div>
+      <div className="row" style={{ gap: 4 }}>
+        {MASKS.map((m) => (
+          <button key={m.label} className={clip.mask === m.id ? "small primary" : "small"} onClick={() => set({ mask: m.id })}>{m.label}</button>
+        ))}
+      </div>
+      <div className="small muted">Layout (split screen)</div>
+      <div className="row" style={{ gap: 4, flexWrap: "wrap" }}>
+        {LAYOUTS.map((l) => {
+          const on = l.box ? !!clip.box && JSON.stringify(clip.box) === JSON.stringify(l.box) : !clip.box;
+          return (
+            <button key={l.id} className={on ? "small primary" : "small"} title={l.box ? "Put another clip on a second video track in the other half" : "Fill the whole frame"} onClick={() => set({ box: l.box, transform: undefined, keyframes: undefined })}>
+              {l.label}
+            </button>
+          );
+        })}
+      </div>
       {asset?.kind === "video" && (
         <button
           disabled={!!busy}
@@ -289,7 +308,7 @@ function FrameControls({ clip }: { clip: MediaClip }) {
           {busy ?? "🎯 Smart reframe"}
         </button>
       )}
-      {mode !== "fit" && (
+      {mode !== "fit" && !generated && (
         <Num
           label={clip.focus && clip.focus.length > 1 ? "Focus (tracked — dragging fixes it)" : "Focus left ↔ right"}
           value={f.x * 100} min={0} max={100} step={1} suffix="%"

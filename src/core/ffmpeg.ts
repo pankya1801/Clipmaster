@@ -1,4 +1,5 @@
 import { clipFit, reframeGraph } from "./reframe";
+import { boxPixels, generatorOfPath, maskFilter } from "./visuals";
 import { clipDuration, clipEnd, clipsOnTrack, projectDuration } from "./project";
 import { buildAss } from "./captions";
 import { effectById, slideOverlay, transitionFilters } from "./effects";
@@ -119,13 +120,21 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
         if (!isImage) tail = Math.min(tail, Math.max(0, (asset.duration - c.out) / c.speed));
       }
       const shown = dur + tail;
-      const idx = addInput(asset.path, isImage, shown);
       const keys = c.keyframes?.length ? c.keyframes : undefined;
       const tf = keys ? keys[0] : c.transform;
+      // Layout box: the clip fills only part of the frame (split screen).
+      const box = !tf && c.box ? boxPixels(c.box, W, H) : { w: W, h: H };
+      const gen = generatorOfPath(asset.path);
+      let idx: number;
+      if (gen) {
+        args.push("-f", "lavfi", "-t", n(shown), "-i", gen.source(box.w, box.h, fps, shown));
+        idx = inputIndex++;
+      } else idx = addInput(asset.path, isImage, shown);
+      const media = gen ? { width: box.w, height: box.h } : asset;
       // With a transform the clip keeps its own aspect (no letterbox pad), so
       // effects see the fitted frame size instead of the canvas size.
-      const fit = fittedSize(asset.width, asset.height, W, H);
-      const ctx = tf ? { W: fit.w, H: fit.h, fps, duration: dur } : { W, H, fps, duration: dur };
+      const fit = fittedSize(media.width, media.height, W, H);
+      const ctx = tf ? { W: fit.w, H: fit.h, fps, duration: dur } : { W: box.w, H: box.h, fps, duration: dur };
       const head = [
         isImage ? `trim=duration=${n(shown)}` : `trim=start=${n(c.in)}:end=${n(c.out + tail * c.speed)}`,
         `setpts=(PTS-STARTPTS)/${n(c.speed)}`,
@@ -133,7 +142,7 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
       // Untransformed clips fill the canvas per their fit mode (fit / fill / blur).
       if (!tf) {
         filters.push(`[${idx}:v]${head.join(",")}[r${vi}in]`);
-        filters.push(reframeGraph(c, asset, W, H, clipFit(c, p.settings), `r${vi}in`, `r${vi}`));
+        filters.push(reframeGraph(c, media, box.w, box.h, gen ? "fill" : clipFit(c, p.settings), `r${vi}in`, `r${vi}`));
       }
       const chain = [
         ...(tf ? head : []),
@@ -141,7 +150,9 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
         "setsar=1",
         `fps=${fps}`,
         ...(c.effects ?? []).map((e) => effectById(e.id)?.filter(e.amount, ctx)).filter((x): x is string => !!x),
+        gen?.category === "overlay" ? "format=rgba" : "",
         "format=yuva420p",
+        maskFilter(c.mask) ?? "",
         ...transitionFilters(c.transIn, c.transOut, dur, ctx),
         ...(keys ? keyframeFilters(keys, fit) : tf ? transformFilters(tf) : []),
         `setpts=PTS+${n(c.start)}/TB`,
@@ -149,8 +160,9 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
       filters.push(`[${tf ? `${idx}:v` : `r${vi}`}]${chain.join(",")}[v${vi}]`);
       const pos = slideOverlay(c.transIn, c.start);
       const tv = `(t-${n(c.start)})`;
-      const cx = keys ? keyframeExpr(keys, "x", tv) : n(tf?.x ?? 0.5);
-      const cy = keys ? keyframeExpr(keys, "y", tv) : n(tf?.y ?? 0.5);
+      const boxCentre = !tf && c.box ? { x: c.box.x + c.box.w / 2, y: c.box.y + c.box.h / 2 } : { x: 0.5, y: 0.5 };
+      const cx = keys ? keyframeExpr(keys, "x", tv) : n(tf?.x ?? boxCentre.x);
+      const cy = keys ? keyframeExpr(keys, "y", tv) : n(tf?.y ?? boxCentre.y);
       filters.push(
         `[${last}][v${vi}]overlay=x='W*${cx}-w/2+(${pos.x})':y='H*${cy}-h/2+(${pos.y})':eof_action=pass:enable='between(t,${n(c.start)},${n(c.start + shown)})'[o${vi}]`
       );

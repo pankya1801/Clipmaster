@@ -387,6 +387,23 @@ pub fn fonts_dir(app: AppHandle) -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
+/// Save a rendered sticker (base64 PNG) in the app's data folder so projects
+/// keep working after a restart. Returns the file path.
+#[tauri::command]
+pub fn save_sticker(app: AppHandle, name: String, png_base64: String) -> Result<String, String> {
+    use tauri::Manager;
+    let safe: String = name.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect();
+    if safe.is_empty() {
+        return Err("Invalid sticker name".into());
+    }
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("stickers");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(format!("{safe}.png"));
+    let bytes = base64::engine::general_purpose::STANDARD.decode(png_base64).map_err(|e| e.to_string())?;
+    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
