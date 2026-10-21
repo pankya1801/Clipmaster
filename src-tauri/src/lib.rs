@@ -11,6 +11,7 @@ pub fn run() {
         .manage(ExportState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             media::ffmpeg_status,
+            media::sample_frames,
             media::probe_media,
             media::thumbnail,
             media::export_video,

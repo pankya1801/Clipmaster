@@ -6,6 +6,7 @@ import { clipDuration, clipEnd, clipsOnTrack, IDENTITY_TRANSFORM, projectDuratio
 import type { MediaClip, Project, TextClip } from "../core/types";
 import { presetPreview, textPreset } from "../core/textPresets";
 import { mediaUrl } from "../lib/backend";
+import { clipFit, focusAt, objectPosition } from "../core/reframe";
 import { captionCss } from "../lib/captionStyle";
 import { useEditor } from "../store";
 
@@ -122,6 +123,8 @@ export function Preview() {
       const el = mediaEls.current.get(c.id);
       const track = project.tracks.find((t) => t.id === c.trackId);
       if (el) syncMedia(el, c, playhead, playing, track?.muted ? 0 : gainAt(c, playhead));
+      const bgEl = mediaEls.current.get(c.id + "#bg");
+      if (bgEl) syncMedia(bgEl, c, playhead, playing, 0);
     }
     const live = new Set(audible.map((c) => c.id));
     for (const c of audible) {
@@ -209,7 +212,28 @@ export function Preview() {
               outline: selected.includes(c.id) && tf ? "2px dashed #a78bfa" : undefined,
               ...(tf ? fittedBox(asset.width, asset.height, W, H, tf.x, tf.y) : {}),
             };
-            return asset.kind === "image" ? (
+            const mode = tf ? "fit" : clipFit(c, project.settings);
+            const pos = objectPosition(asset.width, asset.height, W, H, focusAt(c.focus, c.in + (playhead - c.start) * c.speed));
+            const fitStyle: React.CSSProperties = tf ? {} : mode === "fill" ? { objectFit: "cover", objectPosition: pos } : { objectFit: "contain" };
+            Object.assign(style, fitStyle);
+            const bg: React.CSSProperties = { objectFit: "cover", objectPosition: pos, filter: "blur(14px) brightness(.9) saturate(1.1)", transform: "scale(1.08)" };
+            const blurBg = mode === "blur" && (asset.kind === "image" ? (
+              <img key={c.id + "#bg"} className="layer" src={mediaUrl(asset.path)} style={bg} alt="" draggable={false} />
+            ) : (
+              <video
+                key={c.id + "#bg"}
+                ref={(el) => {
+                  if (el) mediaEls.current.set(c.id + "#bg", el);
+                  else mediaEls.current.delete(c.id + "#bg");
+                }}
+                src={mediaUrl(asset.path)}
+                style={bg}
+                muted
+                preload="auto"
+                playsInline
+              />
+            ));
+            return [blurBg, asset.kind === "image" ? (
               <img key={c.id} className="layer" src={mediaUrl(asset.path)} style={style} alt="" draggable={false} />
             ) : (
               <video
@@ -223,7 +247,7 @@ export function Preview() {
                 preload="auto"
                 playsInline
               />
-            );
+            )];
           })}
           {texts.map((t) =>
             textPreset(t.preset) ? (

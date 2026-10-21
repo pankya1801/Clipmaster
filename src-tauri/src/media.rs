@@ -394,6 +394,18 @@ mod tests {
     }
 
     #[test]
+    fn samples_small_rgb_frames() {
+        let Some(v) = fixture("cm_sample.mp4", &["-f", "lavfi", "-i", "testsrc=s=320x180:r=30:d=2", "-pix_fmt", "yuv420p"]) else {
+            eprintln!("ffmpeg not installed; skipping");
+            return;
+        };
+        let b64 = sample_frames_blocking(&v, 0.0, 2.0, 2.0, 64, 36).unwrap();
+        let bytes = base64::engine::general_purpose::STANDARD.decode(b64).unwrap();
+        assert_eq!(bytes.len() % (64 * 36 * 3), 0);
+        assert!((3..=5).contains(&(bytes.len() / (64 * 36 * 3))));
+    }
+
+    #[test]
     fn probes_video_audio_and_image() {
         let Some(v) = fixture("cm_probe.mp4", &["-f", "lavfi", "-i", "testsrc=s=320x240:d=2", "-f", "lavfi", "-i", "sine=d=2", "-shortest", "-pix_fmt", "yuv420p"]) else {
             eprintln!("ffmpeg not installed; skipping");
@@ -468,4 +480,26 @@ fn envelope_blocking(path: &str, start: f64, end: f64) -> Result<Vec<f32>, Strin
         .chunks(ENVELOPE_HOP)
         .map(|c| (c.iter().map(|v| v * v).sum::<f32>() / c.len() as f32).sqrt())
         .collect())
+}
+
+/// Small RGB frames for subject tracking (Smart reframe): `fps` frames per
+/// second between `start` and `end` (source seconds), scaled to width×height,
+/// returned base64-encoded as packed rgb24.
+#[tauri::command]
+pub async fn sample_frames(path: String, start: f64, end: f64, fps: f64, width: u32, height: u32) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || sample_frames_blocking(&path, start, end, fps, width, height))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn sample_frames_blocking(path: &str, start: f64, end: f64, fps: f64, width: u32, height: u32) -> Result<String, String> {
+    let out = command("ffmpeg")
+        .args(["-v", "error", "-ss", &format!("{start:.3}"), "-to", &format!("{end:.3}"), "-i", path])
+        .args(["-an", "-vf", &format!("fps={fps},scale={width}:{height}:flags=area"), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(format!("Could not read video: {}", String::from_utf8_lossy(&out.stderr).trim()));
+    }
+    Ok(base64::engine::general_purpose::STANDARD.encode(out.stdout))
 }
