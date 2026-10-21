@@ -52,18 +52,18 @@ case "$TRIPLE" in
       # Primary: martin-riedl.de static builds (retried).
       if fetch "$tool.zip" "https://ffmpeg.martin-riedl.de/redirect/latest/macos/$ARCH/release/$tool.zip"; then
         unzip -q -o "$tool.zip"
-      elif [[ "$ARCH" == amd64 && "$tool" == ffmpeg ]]; then
-        # Intel fallback: ffmpeg-static's GitHub release (FFmpeg 6.1.1).
-        fetch ffmpeg.gz "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-darwin-x64.gz"
+      elif [[ "$tool" == ffmpeg ]]; then
+        # Fallback: ffmpeg-static's GitHub release (FFmpeg 6.1.1).
+        NODE_ARCH=arm64
+        [[ "$ARCH" == amd64 ]] && NODE_ARCH=x64
+        fetch ffmpeg.gz "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-darwin-$NODE_ARCH.gz"
         gunzip -f ffmpeg.gz
-      elif [[ "$ARCH" == amd64 ]]; then
-        # Intel fallback: ffprobe from the npm registry.
-        npm pack --silent @ffprobe-installer/darwin-x64@5.1.0 >/dev/null
-        tar -xzf ffprobe-installer-darwin-x64-5.1.0.tgz
-        cp package/ffprobe ffprobe
       else
-        echo "Could not download $tool for $TRIPLE" >&2
-        exit 1
+        # Fallback: ffprobe from the npm registry.
+        if [[ "$ARCH" == amd64 ]]; then PKG=darwin-x64 VER=5.1.0; else PKG=darwin-arm64 VER=5.0.1; fi
+        npm pack --silent "@ffprobe-installer/$PKG@$VER" >/dev/null
+        tar -xzf "ffprobe-installer-$PKG-$VER.tgz"
+        cp package/ffprobe ffprobe
       fi
       cp "$tool" "$OUT/clipmaster-$tool-$TRIPLE"
       chmod +x "$OUT/clipmaster-$tool-$TRIPLE"
