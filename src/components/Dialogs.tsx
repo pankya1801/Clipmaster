@@ -3,7 +3,8 @@ import { DEFAULT_AUTO_EDIT } from "../core/autoedit";
 import { EFFECTS } from "../core/effects";
 import { buildExportPlan, ExportQuality } from "../core/ffmpeg";
 import { projectDuration } from "../core/project";
-import { errorText, loadWhisperConfig, runAutoEdit, runBeatSync, saveWhisperConfig, WhisperModel } from "../lib/actions";
+import { AUTO_EDIT_PRESETS } from "../core/smartcut";
+import { AutoEditRun, errorText, loadWhisperConfig, runAutoEdit, runBeatSync, saveWhisperConfig, WhisperModel } from "../lib/actions";
 import { invoke, isTauri, saveDialog } from "../lib/backend";
 import { useEditor } from "../store";
 import { SHORTCUTS } from "./shortcuts";
@@ -114,7 +115,19 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
 export function AutoEditDialog({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<"talk" | "music">("talk");
   const [beat, setBeat] = useState({ everyBeats: 2, muteClips: true, punchIn: true, flash: false });
-  const [opts, setOpts] = useState({ ...DEFAULT_AUTO_EDIT, captions: true, noiseDb: -35, minSilence: 0.45, duck: true, autoZoom: true });
+  const [opts, setOpts] = useState<AutoEditRun>({
+    ...DEFAULT_AUTO_EDIT, captions: true, noiseDb: -35, minSilence: 0.45, duck: true, autoZoom: true,
+    fillers: true, softFillers: false, broll: false, highlight: false, vertical: false,
+  });
+  const [preset, setPreset] = useState<string | null>(null);
+  const applyPreset = (id: string) => {
+    const pr = AUTO_EDIT_PRESETS.find((x) => x.id === id);
+    if (!pr) return;
+    setPreset(id);
+    setMode(pr.mode);
+    if (pr.talk) setOpts((o) => ({ ...o, ...pr.talk }));
+    if (pr.music) setBeat((b) => ({ ...b, ...pr.music }));
+  };
   const [busy, setBusy] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const set = (patch: Partial<typeof opts>) => setOpts((o) => ({ ...o, ...patch }));
@@ -122,6 +135,14 @@ export function AutoEditDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title="✨ Auto Edit" onClose={() => !busy && onClose()}>
+      <div className="preset-row">
+        {AUTO_EDIT_PRESETS.map((p) => (
+          <button key={p.id} className={preset === p.id ? "preset active" : "preset"} title={p.hint} onClick={() => applyPreset(p.id)}>
+            <b>{p.name}</b>
+            <span>{p.hint}</span>
+          </button>
+        ))}
+      </div>
       <div className="tabs" style={{ margin: "-4px 0 0" }}>
         <button className={mode === "talk" ? "active" : ""} onClick={() => setMode("talk")}>🎙 Talking video</button>
         <button className={mode === "music" ? "active" : ""} onClick={() => setMode("music")}>🎵 Music montage</button>
@@ -150,10 +171,17 @@ export function AutoEditDialog({ onClose }: { onClose: () => void }) {
             <input type="range" min={0.2} max={2} step={0.05} value={opts.minSilence} onChange={(e) => set({ minSilence: +e.target.value })} /></label>
         </div>
       )}
-      <label className="check"><input type="checkbox" checked={opts.autoZoom} disabled={!opts.captions} onChange={(e) => set({ autoZoom: e.target.checked })} /> Auto zoom on key words (uses captions)</label>
+      <label className="check" title="Uses the transcript, so it needs a caption model (Settings)"><input type="checkbox" checked={!!opts.fillers} onChange={(e) => set({ fillers: e.target.checked })} /> Remove filler words (um, uh, stutters)</label>
+      {opts.fillers && (
+        <label className="check" style={{ paddingLeft: 22 }}><input type="checkbox" checked={!!opts.softFillers} onChange={(e) => set({ softFillers: e.target.checked })} /> Also “like”, “you know”, “I mean” when used as filler</label>
+      )}
+      <label className="check"><input type="checkbox" checked={!!opts.autoZoom} onChange={(e) => set({ autoZoom: e.target.checked })} /> Auto zoom on key words (uses the transcript)</label>
+      <label className="check" title="Uses media you imported but haven't put on the timeline"><input type="checkbox" checked={!!opts.broll} onChange={(e) => set({ broll: e.target.checked })} /> Auto B-roll: cut away to your other clips &amp; photos</label>
+      <label className="check"><input type="checkbox" checked={!!opts.highlight} onChange={(e) => set({ highlight: e.target.checked })} /> Make a Short: keep only the best 30–60 seconds</label>
+      <label className="check"><input type="checkbox" checked={!!opts.vertical} onChange={(e) => set({ vertical: e.target.checked })} /> Make it vertical (9:16) and follow the speaker</label>
       <label className="check"><input type="checkbox" checked={opts.duck} onChange={(e) => set({ duck: e.target.checked })} /> Duck background music under speech</label>
-      <label className="check"><input type="checkbox" checked={opts.punchIn} onChange={(e) => set({ punchIn: e.target.checked })} /> Punch-in zoom on every other cut</label>
-      <label className="check"><input type="checkbox" checked={opts.captions} onChange={(e) => set({ captions: e.target.checked })} /> Auto captions (download a model once in Settings)</label>
+      <label className="check"><input type="checkbox" checked={opts.punchIn} onChange={(e) => set({ punchIn: e.target.checked })} /> Smooth jump cuts (punch-in zoom on every other cut)</label>
+      <label className="check"><input type="checkbox" checked={opts.captions} onChange={(e) => set({ captions: e.target.checked })} /> Show captions on the video (download a model once in Settings)</label>
       <div className="row">
         <label className="field grow"><span>Transition at cuts</span>
           <select value={opts.transition} onChange={(e) => set({ transition: e.target.value as typeof opts.transition })}>

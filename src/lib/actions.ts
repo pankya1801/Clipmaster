@@ -5,6 +5,7 @@ import { parseSrt, toSrt } from "../core/captions";
 import {
   addAsset, addText, clipEnd, updateClip, clipsOnTrack, createProject, deleteClips, duplicateClip, placeAsset, splitClip, trackAccepts, addTrack, uid,
 } from "../core/project";
+import { addBroll, cutTimeline, FILLER_PROMPT, findFillers, keepOnly, pickHighlight } from "../core/smartcut";
 import { FitMode, FocusPoint, locateSubject, sampleSize, smoothPath, unpackFrames } from "../core/reframe";
 import type { CaptionWord, MediaAsset, MediaClip, Project } from "../core/types";
 import { useEditor } from "../store";
@@ -179,7 +180,7 @@ export function saveWhisperConfig(c: WhisperConfig) {
 }
 
 /** Transcribe every speech clip on the main track and place word-timed captions. */
-export async function autoCaptions(onProgress?: (msg: string) => void): Promise<number> {
+export async function autoCaptions(onProgress?: (msg: string) => void, prompt?: string): Promise<number> {
   const cfg = loadWhisperConfig();
   if (!isTauri) throw new Error("Auto captions need the desktop app.");
   let model = cfg.model;
@@ -202,7 +203,7 @@ export async function autoCaptions(onProgress?: (msg: string) => void): Promise<
     if (!asset?.hasAudio) continue;
     onProgress?.(`Transcribing clip ${i + 1} of ${clips.length}…`);
     const srt = await invoke<string>("transcribe", {
-      path: asset.path, start: c.in, end: c.out, whisperBin: cfg.bin, model, language,
+      path: asset.path, start: c.in, end: c.out, whisperBin: cfg.bin, model, language, prompt: prompt ?? null,
     });
     for (const w of parseSrt(srt)) words.push({ text: w.text, start: c.start + w.start / c.speed, end: c.start + w.end / c.speed });
   }
@@ -247,8 +248,22 @@ function pickTextFile(accept: string): Promise<string | null> {
 
 // ---------- auto edit ----------
 
+export type AutoEditRun = AutoEditOptions & {
+  captions: boolean; noiseDb: number; minSilence: number; duck?: boolean; autoZoom?: boolean;
+  /** Cut "um", "uh" and stutters (needs captions). */
+  fillers?: boolean;
+  /** Also cut "like", "you know", "I mean"… when used as filler. */
+  softFillers?: boolean;
+  /** Cut away to your other clips/photos at natural pauses. */
+  broll?: boolean;
+  /** Keep only the best 30–60 seconds. */
+  highlight?: boolean;
+  /** Switch to 9:16 and reframe. */
+  vertical?: boolean;
+};
+
 export async function runAutoEdit(
-  opts: AutoEditOptions & { captions: boolean; noiseDb: number; minSilence: number; duck?: boolean; autoZoom?: boolean },
+  opts: AutoEditRun,
   onProgress: (msg: string) => void
 ): Promise<string> {
   const { project } = S();
@@ -268,17 +283,40 @@ export async function runAutoEdit(
   }
   const r = applyAutoEdit(project, silences, opts);
   S().commit(() => (opts.duck ? { ...r.project, settings: { ...r.project.settings, autoDuck: true } } : r.project));
-  let msg = `Removed ${r.removedSeconds.toFixed(1)}s of silence with ${r.cuts} cuts.`;
-  if (opts.captions) {
+  const parts: string[] = [opts.removeSilence ? `Removed ${r.removedSeconds.toFixed(1)}s of silence with ${r.cuts} cuts.` : ""];
+  const needWords = opts.captions || opts.fillers || opts.highlight;
+  let haveWords = false;
+  if (needWords) {
     try {
-      const n = await autoCaptions(onProgress);
-      msg += ` Added ${n} caption words.`;
-      if (opts.autoZoom) msg += ` ${autoZoom()}`;
+      const n = await autoCaptions(onProgress, opts.fillers ? FILLER_PROMPT : undefined);
+      haveWords = n > 0;
+      parts.push(`Added ${n} caption words.`);
     } catch (e) {
-      msg += ` Captions skipped: ${errorText(e)}`;
+      parts.push(`Captions skipped: ${errorText(e)}`);
     }
   }
-  return msg;
+  if (haveWords && opts.fillers) {
+    onProgress("Removing filler words…");
+    const main = mainTrackId(S().project);
+    const ranges = findFillers(S().project.captions, opts.softFillers);
+    if (main && ranges.length) {
+      const cut = cutTimeline(S().project, ranges, [main]);
+      S().commit(() => cut.project);
+      parts.push(`Cut ${ranges.length} filler word${ranges.length > 1 ? "s" : ""} (${cut.removed.toFixed(1)}s).`);
+    } else parts.push("No filler words found.");
+  }
+  if (haveWords && opts.highlight) {
+    const best = pickHighlight(S().project.captions);
+    if (best) {
+      S().commit((p) => keepOnly(p, best));
+      parts.push(`Kept the best ${Math.round(best.end - best.start)}s: “${best.text.slice(0, 60)}…”`);
+    }
+  }
+  if (haveWords && opts.autoZoom) parts.push(autoZoom());
+  if (!opts.captions && haveWords) S().commit((p) => ({ ...p, captions: [] }));
+  if (opts.vertical) parts.push(await makeFormat(1080, 1920, "fill", onProgress));
+  if (opts.broll) parts.push(addAutoBroll());
+  return parts.filter(Boolean).join(" ");
 }
 
 export function errorText(e: unknown): string {
@@ -358,4 +396,20 @@ export async function makeFormat(width: number, height: number, fit: FitMode, on
   } catch (e) {
     return `Canvas set to ${width}×${height}. ${errorText(e)}`;
   }
+}
+
+// ---------- B-roll ----------
+
+/** Put the media you imported but haven't used yet over the main clip at natural pauses. */
+export function addAutoBroll(): string {
+  const p = S().project;
+  const main = mainTrackId(p);
+  if (!main) return "B-roll skipped: no main clip.";
+  const used = new Set(Object.values(p.clips).flatMap((c) => (c.type === "media" ? [c.assetId] : [])));
+  const pool = Object.values(p.assets).filter((a) => !used.has(a.id) && a.kind !== "audio").map((a) => a.id);
+  if (!pool.length) return "B-roll skipped: import some extra clips or photos to use as B-roll.";
+  const r = addBroll(p, pool, main);
+  if (!r.shots) return "No good spots for B-roll found.";
+  S().commit(() => r.project);
+  return `Added ${r.shots} B-roll shot${r.shots > 1 ? "s" : ""}.`;
 }
