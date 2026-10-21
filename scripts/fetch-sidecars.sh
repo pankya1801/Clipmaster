@@ -49,17 +49,35 @@ case "$TRIPLE" in
     ARCH=arm64
     [[ "$TRIPLE" == x86_64* ]] && ARCH=amd64
     for tool in ffmpeg ffprobe; do
-      # Primary: martin-riedl.de static builds. Its server sometimes drops
-      # connections from CI runners, so retry, then fall back to evermeet.cx
-      # (Intel) / osxexperts.net (Apple Silicon) static builds.
-      if [[ "$ARCH" == amd64 ]]; then FALLBACK="https://evermeet.cx/ffmpeg/getrelease/$tool/zip"
-      else FALLBACK="https://www.osxexperts.net/${tool}71arm.zip"; fi
-      fetch "$tool.zip" "https://ffmpeg.martin-riedl.de/redirect/latest/macos/$ARCH/release/$tool.zip" "$FALLBACK"
-      unzip -q -o "$tool.zip"
+      # Primary: martin-riedl.de static builds (retried).
+      if fetch "$tool.zip" "https://ffmpeg.martin-riedl.de/redirect/latest/macos/$ARCH/release/$tool.zip"; then
+        unzip -q -o "$tool.zip"
+      elif [[ "$tool" == ffmpeg ]]; then
+        # Fallback: ffmpeg-static's GitHub release (FFmpeg 6.1.1).
+        NODE_ARCH=arm64
+        [[ "$ARCH" == amd64 ]] && NODE_ARCH=x64
+        fetch ffmpeg.gz "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-darwin-$NODE_ARCH.gz"
+        gunzip -f ffmpeg.gz
+      else
+        # Fallback: ffprobe from the npm registry.
+        if [[ "$ARCH" == amd64 ]]; then PKG=darwin-x64 VER=5.1.0; else PKG=darwin-arm64 VER=5.0.1; fi
+        npm pack --silent "@ffprobe-installer/$PKG@$VER" >/dev/null
+        tar -xzf "ffprobe-installer-$PKG-$VER.tgz"
+        cp package/ffprobe ffprobe
+      fi
       cp "$tool" "$OUT/clipmaster-$tool-$TRIPLE"
       chmod +x "$OUT/clipmaster-$tool-$TRIPLE"
     done
-    fetch "$OUT/FFMPEG-LICENSE.txt" https://www.gnu.org/licenses/gpl-3.0.txt
+    # Make sure the build has the filters Clipmaster relies on (captions, gradients).
+    if FILTERS="$("$OUT/clipmaster-ffmpeg-$TRIPLE" -hide_banner -filters 2>/dev/null)"; then
+      for f in ass gradients sidechaincompress drawbox geq; do
+        grep -qE "^ [^ ]+ $f " <<<"$FILTERS" || { echo "FFmpeg for $TRIPLE lacks the '$f' filter" >&2; exit 1; }
+      done
+    else
+      echo "warning: could not run FFmpeg for $TRIPLE here to check its filters" >&2
+    fi
+    # Bundled copy: gnu.org is sometimes unreachable from CI.
+    cp "$ROOT/scripts/licenses/GPL-3.0.txt" "$OUT/FFMPEG-LICENSE.txt"
     ;;
   *)
     echo "Unsupported target $TRIPLE" >&2
