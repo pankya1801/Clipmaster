@@ -7,6 +7,7 @@ import type { MediaClip, Project, TextClip } from "../core/types";
 import { presetPreview, textPreset } from "../core/textPresets";
 import { mediaUrl } from "../lib/backend";
 import { clipFit, focusAt, objectPosition } from "../core/reframe";
+import { generatorOfPath, maskCss } from "../core/visuals";
 import { captionCss } from "../lib/captionStyle";
 import { useEditor } from "../store";
 
@@ -212,11 +213,22 @@ export function Preview() {
               outline: selected.includes(c.id) && tf ? "2px dashed #a78bfa" : undefined,
               ...(tf ? fittedBox(asset.width, asset.height, W, H, tf.x, tf.y) : {}),
             };
-            const mode = tf ? "fit" : clipFit(c, project.settings);
-            const pos = objectPosition(asset.width, asset.height, W, H, focusAt(c.focus, c.in + (playhead - c.start) * c.speed));
+            const gen = generatorOfPath(asset.path);
+            const mode = tf ? "fit" : gen ? "fill" : clipFit(c, project.settings);
+            // Split-screen layout box (untransformed clips only).
+            const lb = !tf && c.box ? c.box : undefined;
+            const bw = lb ? lb.w * W : W;
+            const bh = lb ? lb.h * H : H;
+            const boxStyle: React.CSSProperties = lb ? { left: `${lb.x * 100}%`, top: `${lb.y * 100}%`, width: `${lb.w * 100}%`, height: `${lb.h * 100}%` } : {};
+            const pos = objectPosition(asset.width, asset.height, bw, bh, focusAt(c.focus, c.in + (playhead - c.start) * c.speed));
             const fitStyle: React.CSSProperties = tf ? {} : mode === "fill" ? { objectFit: "cover", objectPosition: pos } : { objectFit: "contain" };
-            Object.assign(style, fitStyle);
-            const bg: React.CSSProperties = { objectFit: "cover", objectPosition: pos, filter: "blur(14px) brightness(.9) saturate(1.1)", transform: "scale(1.08)" };
+            const fitted = fittedSize(asset.width, asset.height, W, H);
+            const clipPath = maskCss(c.mask, (tf ? fitted.w : bw) * scale, (tf ? fitted.h : bh) * scale);
+            Object.assign(style, fitStyle, boxStyle, clipPath ? { clipPath } : {});
+            const bg: React.CSSProperties = { ...boxStyle, objectFit: "cover", objectPosition: pos, filter: "blur(14px) brightness(.9) saturate(1.1)", transform: "scale(1.08)", clipPath };
+            if (gen) {
+              return <div key={c.id} className="layer gen-layer" style={{ ...style, background: gen.css(playhead - c.start), ...(gen.style as React.CSSProperties) }} />;
+            }
             const blurBg = mode === "blur" && (asset.kind === "image" ? (
               <img key={c.id + "#bg"} className="layer" src={mediaUrl(asset.path)} style={bg} alt="" draggable={false} />
             ) : (

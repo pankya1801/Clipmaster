@@ -189,3 +189,10 @@ label.check { display: flex; gap: 6px; align-items: center; font-size: 12px; }
 .preset { min-width: 0; white-space: normal; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 8px 10px; }
 .preset span { font-size: 11px; color: var(--muted); font-weight: 400; }
 .preset.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.gen-thumb { position: relative; overflow: hidden; display: grid; place-items: center; }
+.gen-ov { position: absolute; inset: 0; }
+.gen-title { position: relative; color: #fff; font-weight: 800; font-size: 12px; text-shadow: 0 1px 3px #000a; text-align: center; padding: 0 4px; }
+.sticker-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.sticker { aspect-ratio: 1; padding: 0; display: grid; place-items: center; font-size: 22px; }
+.sticker img { width: 80%; height: 80%; object-fit: contain; }
+.frame .gen-layer { position: absolute; inset: 0; width: 100%; height: 100%; }

@@ -4,9 +4,11 @@ import { EFFECTS, EffectCategory, TRANSITIONS } from "../core/effects";
 import { TEXT_PRESETS } from "../core/textPresets";
 import type { MediaClip } from "../core/types";
 import { updateClip } from "../core/project";
-import { addAssetToTimeline, addTextAtPlayhead, autoCaptions, autoZoom, errorText, exportSrt, importMedia, importSrt, notify } from "../lib/actions";
+import { addGenerator, addSticker, addTemplate, addAssetToTimeline, addTextAtPlayhead, autoCaptions, autoZoom, errorText, exportSrt, importMedia, importSrt, notify } from "../lib/actions";
 import { captionCss } from "../lib/captionStyle";
 import { useEditor } from "../store";
+import { GENERATORS, INTROS, STICKERS } from "../core/visuals";
+import { stickerThumb } from "../lib/stickers";
 import previewImage from "../assets/preview.jpg";
 
 // Effect thumbnails pre-rendered with the real export filters (npm run previews).
@@ -14,14 +16,14 @@ const FX_THUMBS = import.meta.glob("../assets/fx/*.jpg", { eager: true, import: 
 const fxThumb = (id: string) => FX_THUMBS[`../assets/fx/${id}.jpg`] ?? previewImage;
 import { formatTime } from "./Preview";
 
-type Tab = "media" | "text" | "effects" | "transitions" | "captions";
+type Tab = "media" | "text" | "elements" | "effects" | "transitions" | "captions";
 
 export function LeftPanel() {
   const [tab, setTab] = useState<Tab>("media");
   return (
     <div className="panel">
       <div className="tabs">
-        {(["media", "text", "effects", "transitions", "captions"] as Tab[]).map((t) => (
+        {(["media", "text", "elements", "effects", "transitions", "captions"] as Tab[]).map((t) => (
           <button key={t} className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
             {t[0].toUpperCase() + t.slice(1)}
           </button>
@@ -30,6 +32,7 @@ export function LeftPanel() {
       <div className="panel-body" key={tab}>
         {tab === "media" && <MediaTab />}
         {tab === "text" && <TextTab />}
+        {tab === "elements" && <ElementsTab />}
         {tab === "effects" && <EffectsTab />}
         {tab === "transitions" && <TransitionsTab />}
         {tab === "captions" && <CaptionsTab />}
@@ -85,6 +88,54 @@ function TextTab() {
               <button key={p.id} className="card" onClick={() => addTextAtPlayhead(undefined, p.id)} title={`Add “${p.name}” at the playhead`}>
                 <div className="thumb"><img src={fxThumb(`text-${p.id}`)} alt="" loading="lazy" draggable={false} /></div>
                 <div className="label">{p.name}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function ElementsTab() {
+  const run = (f: () => unknown) => Promise.resolve(f()).catch((e) => notify(errorText(e)));
+  return (
+    <>
+      <p className="muted small">Click to add at the playhead. Everything here is editable on the timeline like any clip.</p>
+      <div className="section-title">Intros &amp; outros</div>
+      <div className="grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
+        {INTROS.map((t) => {
+          const bg = GENERATORS.find((g) => g.id === t.bg)!;
+          const ov = GENERATORS.find((g) => g.id === t.overlay);
+          return (
+            <button key={t.id} className="card" onClick={() => run(() => addTemplate(t.id))} title={t.kind === "intro" ? "Adds before your video (everything moves later)" : "Adds after your video"}>
+              <div className="thumb gen-thumb" style={{ background: bg.css(1) }}>
+                {ov && <div className="gen-ov" style={{ background: ov.css(1), ...(ov.style as object) }} />}
+                <span className="gen-title">{t.text.split("\n")[0]}</span>
+              </div>
+              <div className="label">{t.kind === "intro" ? "Intro" : "Outro"} · {t.name}</div>
+            </button>
+          );
+        })}
+      </div>
+      <div className="section-title">Stickers</div>
+      <div className="sticker-grid">
+        {STICKERS.map((s) => (
+          <button key={s.id} className="sticker" title={`Add ${s.name} (pops in)`} onClick={() => run(() => addSticker(s.id))}>
+            {s.emoji ? <span>{s.emoji}</span> : <img src={stickerThumb(s)} alt={s.name} draggable={false} />}
+          </button>
+        ))}
+      </div>
+      {(["overlay", "background"] as const).map((cat) => (
+        <div key={cat}>
+          <div className="section-title">{cat === "overlay" ? "Overlays" : "Animated backgrounds"}</div>
+          <div className="grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
+            {GENERATORS.filter((g) => g.category === cat).map((g) => (
+              <button key={g.id} className="card" onClick={() => run(() => addGenerator(g.id))} title={cat === "overlay" ? "Adds on top of your video" : "Adds under your clips (for titles and text-only clips)"}>
+                <div className="thumb gen-thumb" style={{ background: cat === "overlay" ? "#445566" : g.css(1) }}>
+                  {cat === "overlay" && <div className="gen-ov" style={{ background: g.css(1.2), ...(g.style as object) }} />}
+                </div>
+                <div className="label">{g.name}</div>
               </button>
             ))}
           </div>

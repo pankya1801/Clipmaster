@@ -3,9 +3,12 @@ import { applyAutoZoom } from "../core/autozoom";
 import { beatSyncMontage, detectBeats, findMusicClip, MontageOptions } from "../core/beats";
 import { parseSrt, toSrt } from "../core/captions";
 import {
-  addAsset, addText, clipEnd, updateClip, clipsOnTrack, createProject, deleteClips, duplicateClip, placeAsset, splitClip, trackAccepts, addTrack, uid,
+  addAsset, addText, clipEnd, updateClip, DEFAULT_IMAGE_SECONDS, clipsOnTrack, createProject, deleteClips, duplicateClip, placeAsset, splitClip, trackAccepts, addTrack, uid,
 } from "../core/project";
 import { addBroll, cutTimeline, FILLER_PROMPT, findFillers, keepOnly, pickHighlight } from "../core/smartcut";
+import { applyTemplate } from "../core/templates";
+import { ensureGeneratorAsset, generatorById, introById, stickerById, stickerKeyframes } from "../core/visuals";
+import { renderSticker } from "./stickers";
 import { FitMode, FocusPoint, locateSubject, sampleSize, smoothPath, unpackFrames } from "../core/reframe";
 import type { CaptionWord, MediaAsset, MediaClip, Project } from "../core/types";
 import { useEditor } from "../store";
@@ -412,4 +415,74 @@ export function addAutoBroll(): string {
   if (!r.shots) return "No good spots for B-roll found.";
   S().commit(() => r.project);
   return `Added ${r.shots} B-roll shot${r.shots > 1 ? "s" : ""}.`;
+}
+
+// ---------- elements: stickers, backgrounds, overlays, intros ----------
+
+/** A video track above everything else at [at, at+d), creating one if needed. */
+function freeTopVideoTrack(p: Project, at: number, d: number): { project: Project; trackId: string } {
+  const top = p.tracks.find((t) => t.kind === "video");
+  if (top && !clipsOnTrack(p, top.id).some((c) => c.start < at + d && clipEnd(c) > at)) return { project: p, trackId: top.id };
+  const next = addTrack(p, "video");
+  return { project: next, trackId: next.tracks.find((t) => t.kind === "video")!.id };
+}
+
+export async function addSticker(id: string) {
+  const def = stickerById(id);
+  if (!def) return;
+  const { playhead } = S();
+  const png = renderSticker(def);
+  // Desktop: keep the PNG next to the app data so the project still works later.
+  const path = isTauri ? await invoke<string>("save_sticker", { name: `sticker-${def.id}`, pngBase64: png.split(",")[1] }) : png;
+  const assetId = `stk_${def.id}`;
+  let p = S().project;
+  if (!p.assets[assetId]) p = addAsset(p, { id: assetId, path, name: `Sticker ${def.name}`, kind: "image", duration: 0, width: 512, height: 512, hasAudio: false });
+  const len = 3;
+  const tr = freeTopVideoTrack(p, playhead, len);
+  const r = placeAsset(tr.project, assetId, tr.trackId, playhead);
+  if (!r.clipId) return;
+  // About a third of the frame, slightly above centre (scale 1 = fit the frame).
+  const project = updateClip(r.project, r.clipId, { out: len, keyframes: stickerKeyframes({ x: 0.5, y: 0.4 }, 0.35, len) });
+  S().commit(() => project);
+  S().select([r.clipId]);
+}
+
+export function addGenerator(id: string) {
+  const g = generatorById(id);
+  if (!g) return;
+  const { playhead } = S();
+  const gen = ensureGeneratorAsset(S().project, id);
+  let p = gen.project;
+  let trackId: string;
+  if (g.category === "overlay") {
+    const tr = freeTopVideoTrack(p, playhead, DEFAULT_IMAGE_SECONDS);
+    p = tr.project;
+    trackId = tr.trackId;
+  } else {
+    // Backgrounds go on the bottom video track, or a new one under the others.
+    const videos = p.tracks.filter((t) => t.kind === "video");
+    const bottom = videos[videos.length - 1];
+    if (bottom && !clipsOnTrack(p, bottom.id).some((c) => c.start < playhead + DEFAULT_IMAGE_SECONDS && clipEnd(c) > playhead)) trackId = bottom.id;
+    else {
+      p = addTrack(p, "video");
+      const t = p.tracks.find((x) => !S().project.tracks.some((y) => y.id === x.id))!;
+      // Move the new track below the other video tracks.
+      const rest = p.tracks.filter((x) => x.id !== t.id);
+      const lastVideo = rest.map((x) => x.kind).lastIndexOf("video");
+      p = { ...p, tracks: [...rest.slice(0, lastVideo + 1), t, ...rest.slice(lastVideo + 1)] };
+      trackId = t.id;
+    }
+  }
+  const r = placeAsset(p, gen.assetId, trackId, playhead);
+  if (!r.clipId) return;
+  S().commit(() => r.project);
+  S().select([r.clipId]);
+}
+
+export function addTemplate(id: string) {
+  const tpl = introById(id);
+  if (!tpl) return;
+  const r = applyTemplate(S().project, tpl);
+  S().commit(() => r.project);
+  S().setPlayhead(r.start);
 }
