@@ -76,7 +76,8 @@ case "$TRIPLE" in
     else
       echo "warning: could not run FFmpeg for $TRIPLE here to check its filters" >&2
     fi
-    fetch "$OUT/FFMPEG-LICENSE.txt" https://www.gnu.org/licenses/gpl-3.0.txt
+    # Bundled copy: gnu.org is sometimes unreachable from CI.
+    cp "$ROOT/scripts/licenses/GPL-3.0.txt" "$OUT/FFMPEG-LICENSE.txt"
     ;;
   *)
     echo "Unsupported target $TRIPLE" >&2
