@@ -4,6 +4,16 @@
 # Output: src-tauri/binaries/clipmaster-{ffmpeg,ffprobe,whisper-cli}-<triple>[.exe]
 set -euo pipefail
 
+# Download $1 from the first URL that works, retrying each a few times.
+fetch() {
+  local out="$1"; shift
+  for url in "$@"; do
+    if curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 30 -o "$out" "$url"; then return 0; fi
+    echo "Download failed: $url" >&2
+  done
+  return 1
+}
+
 TRIPLE="${1:?target triple required, e.g. x86_64-unknown-linux-gnu}"
 WHISPER_TAG="${WHISPER_TAG:-v1.9.4}"
 # Pin a stable FFmpeg release (nightly "master" builds have crashed in filters we use).
@@ -39,12 +49,17 @@ case "$TRIPLE" in
     ARCH=arm64
     [[ "$TRIPLE" == x86_64* ]] && ARCH=amd64
     for tool in ffmpeg ffprobe; do
-      curl -fsSL -o "$tool.zip" "https://ffmpeg.martin-riedl.de/redirect/latest/macos/$ARCH/release/$tool.zip"
+      # Primary: martin-riedl.de static builds. Its server sometimes drops
+      # connections from CI runners, so retry, then fall back to evermeet.cx
+      # (Intel) / osxexperts.net (Apple Silicon) static builds.
+      if [[ "$ARCH" == amd64 ]]; then FALLBACK="https://evermeet.cx/ffmpeg/getrelease/$tool/zip"
+      else FALLBACK="https://www.osxexperts.net/${tool}71arm.zip"; fi
+      fetch "$tool.zip" "https://ffmpeg.martin-riedl.de/redirect/latest/macos/$ARCH/release/$tool.zip" "$FALLBACK"
       unzip -q -o "$tool.zip"
       cp "$tool" "$OUT/clipmaster-$tool-$TRIPLE"
       chmod +x "$OUT/clipmaster-$tool-$TRIPLE"
     done
-    curl -fsSL -o "$OUT/FFMPEG-LICENSE.txt" https://www.gnu.org/licenses/gpl-3.0.txt
+    fetch "$OUT/FFMPEG-LICENSE.txt" https://www.gnu.org/licenses/gpl-3.0.txt
     ;;
   *)
     echo "Unsupported target $TRIPLE" >&2
