@@ -26,6 +26,7 @@ function overlapsRange(start: number, c: { type: string; duration?: number; in?:
 }
 
 export function applyTemplate(p0: Project, tpl: IntroTemplate, text = tpl.text): { project: Project; start: number } {
+  if (tpl.id.startsWith("short-")) p0 = { ...p0, settings: { ...p0.settings, width: 1080, height: 1920 } };
   const d = tpl.duration;
   let p = tpl.kind === "intro" ? shiftAll(p0, d) : p0;
   const start = tpl.kind === "intro" ? 0 : projectDuration(p0);

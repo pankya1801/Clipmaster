@@ -416,6 +416,8 @@ function EffectsTab() {
             {EFFECTS.filter((e) => e.category === cat).map((e) => (
               <button
                 key={e.id}
+                draggable
+                onDragStart={(event) => event.dataTransfer.setData("application/x-clipmaster-effect", e.id)}
                 className={`card ${clip?.effects.some((x) => x.id === e.id) ? "active" : ""}`}
                 onClick={() => apply(e.id)}
                 onContextMenu={(ev) => {

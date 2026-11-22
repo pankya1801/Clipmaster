@@ -283,13 +283,17 @@ export interface AutoEditPreset {
   /** Options applied over the dialog's current values. */
   talk?: Partial<{
     removeSilence: boolean; padding: number; minSilence: number; punchIn: boolean; captions: boolean; autoZoom: boolean;
-    duck: boolean; transition: "none" | "flash" | "fade-in" | "zoom-pop"; look: string | null; fillers: boolean; softFillers: boolean;
+    duck: boolean; transition: "adaptive" | "none" | "flash" | "fade-in" | "zoom-pop"; look: string | null; fillers: boolean; softFillers: boolean;
     broll: boolean; highlight: boolean; vertical: boolean;
   }>;
   music?: Partial<{ everyBeats: number; muteClips: boolean; punchIn: boolean; flash: boolean }>;
 }
 
 export const AUTO_EDIT_PRESETS: AutoEditPreset[] = [
+  {
+    id: "shorts", name: "Shorts / Reels", hint: "Trim pauses, pick a spoken highlight, and add spaced transitions and a vivid look", mode: "talk",
+    talk: { removeSilence: true, padding: 0.10, minSilence: 0.4, punchIn: true, captions: true, autoZoom: true, fillers: true, highlight: true, vertical: true, duck: true, broll: false, transition: "adaptive", look: "vivid" },
+  },
   {
     id: "talking-head", name: "🎙 Talking head", hint: "Tight cuts, no ums, zooms on key words, captions", mode: "talk",
     talk: { removeSilence: true, padding: 0.1, minSilence: 0.4, punchIn: true, captions: true, autoZoom: true, fillers: true, softFillers: false, transition: "none", broll: false, highlight: false, look: null },

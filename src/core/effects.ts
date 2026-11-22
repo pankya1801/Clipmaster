@@ -29,6 +29,8 @@ const f = (v: number) => Number(v.toFixed(4)).toString();
 const mix = (a: number, from: number, to: number) => from + (to - from) * a;
 
 export const EFFECTS: EffectDef[] = [
+  { id: "soft-pastel-grade", name: "Soft pastel", category: "color", filter: a => `eq=contrast=${f(1-.18*a)}:brightness=${f(.06*a)}:saturation=${f(1-.25*a)}`, css: a => ({ filter: `contrast(${1-.18*a}) brightness(${1+.06*a}) saturate(${1-.25*a})` }) },
+  { id: "graphic-ink-grade", name: "Graphic ink", category: "stylize", filter: a => `eq=saturation=${f(1-a)}:contrast=${f(1+1.4*a)}`, css: a => ({ filter: `grayscale(${a}) contrast(${1+1.4*a})` }) },
   // ---------- Color & grading ----------
   { id: "brighten", name: "Brighten", category: "color", filter: (a) => `eq=brightness=${f(0.25 * a)}`, css: (a) => ({ filter: `brightness(${f(1 + 0.5 * a)})` }) },
   { id: "contrast", name: "Contrast", category: "color", filter: (a) => `eq=contrast=${f(1 + 0.6 * a)}`, css: (a) => ({ filter: `contrast(${f(1 + 0.6 * a)})` }) },

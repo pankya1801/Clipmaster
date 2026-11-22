@@ -1,6 +1,6 @@
 [package]
 name = "clipmaster"
-version = "0.5.0"
+version = "0.6.0"
 description = "Free, open-source desktop video editor"
 license = "MIT"
 edition = "2021"

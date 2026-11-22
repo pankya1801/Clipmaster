@@ -1,0 +1,31 @@
+name: Build Windows installer
+on:
+  workflow_dispatch:
+  push:
+    branches: [build/windows-0.6.0]
+permissions:
+  contents: read
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Prepare bundled media tools
+        shell: bash
+        run: scripts/fetch-sidecars.sh x86_64-pc-windows-msvc
+      - run: npm ci
+      - run: npm run tauri -- build --bundles msi --config src-tauri/tauri.bundle.conf.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Clipmaster-Windows-x64
+          path: src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+

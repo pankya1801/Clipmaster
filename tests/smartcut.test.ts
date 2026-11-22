@@ -114,6 +114,6 @@ describe("highlights", () => {
 
 describe("presets", () => {
   it("covers talking head, vlog, podcast and montage", () => {
-    expect(AUTO_EDIT_PRESETS.map((p) => p.id)).toEqual(["talking-head", "vlog", "podcast", "montage"]);
+    expect(AUTO_EDIT_PRESETS.map((p) => p.id)).toEqual(["shorts", "talking-head", "vlog", "podcast", "montage"]);
   });
 });

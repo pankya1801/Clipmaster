@@ -18,6 +18,31 @@ export const notify = (msg: string) => window.dispatchEvent(new CustomEvent("cm-
 
 const S = () => useEditor.getState();
 
+export async function extractAudio(clip: MediaClip) {
+  const asset = S().project.assets[clip.assetId];
+  try {
+    const path = await saveDialog(asset.name.replace(/\.[^.]+$/, "") + "-audio.wav", "wav", "Wave audio");
+    if (!path) return;
+    await invoke("run_ffmpeg", { args: ["-nostdin", "-n", "-ss", String(clip.in), "-i", asset.path, "-t", String(clip.out - clip.in), "-map", "0:a:0", "-c:a", "pcm_s16le", path] });
+    const name = path.split(/[\\/]/).pop()!;
+    const envelope = await invoke<number[]>("audio_envelope", { path, start: 0, end: clip.out - clip.in }).catch(() => []);
+    const bins = Math.min(128, envelope.length);
+    const waveform = Array.from({ length: bins }, (_, i) => {
+      const chunk = envelope.slice(Math.floor(i * envelope.length / bins), Math.floor((i + 1) * envelope.length / bins));
+      return Math.min(1, chunk.reduce((peak, value) => Math.max(peak, value), 0) * 3);
+    });
+    const audio = { waveform, ...await probe(path, name), id: uid("a"), path, name };
+    S().commit(p => {
+      if (p.clips[clip.id] !== clip) return p;
+      const next = addTrack(addAsset(p, audio), "audio");
+      const track = next.tracks.find(t => !p.tracks.some(old => old.id === t.id))!;
+      const detached = { ...clip, dialogue: true, id: uid("c"), trackId: track.id, assetId: audio.id, in: 0, out: clip.out - clip.in, effects: [] };
+      return { ...next, clips: { ...next.clips, [clip.id]: { ...clip, volume: 0 }, [detached.id]: detached } };
+    });
+    notify("Audio saved to " + path);
+  } catch (error) { notify(errorText(error)); }
+}
+
 export async function importMedia() {
   const files = await pickMediaFiles();
   for (const f of files) {
@@ -281,12 +306,15 @@ export async function runAutoEdit(
     let i = 0;
     for (const id of assets) {
       const a = project.assets[id];
+      if (!a?.hasAudio || a.kind === "image") continue;
       onProgress(`Finding silences (${++i}/${assets.size})…`);
       const log = await invoke<string>("detect_silence", { path: a.path, noiseDb: opts.noiseDb, minDuration: opts.minSilence });
       silences[id] = parseSilenceDetect(log, a.duration);
     }
   }
   const r = applyAutoEdit(project, silences, opts);
+  if (!clipsOnTrack(r.project, trackId).length) throw new Error("No speech survived the silence settings. Lower the threshold or disable silence removal.");
+  if (S().project !== project) throw new Error("The project changed during analysis. Run Auto Edit again.");
   S().commit(() => (opts.duck ? { ...r.project, settings: { ...r.project.settings, autoDuck: true } } : r.project));
   const parts: string[] = [opts.removeSilence ? `Removed ${r.removedSeconds.toFixed(1)}s of silence with ${r.cuts} cuts.` : ""];
   const needWords = opts.captions || opts.fillers || opts.highlight;

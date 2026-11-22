@@ -82,6 +82,7 @@ export function Preview() {
   const setPlayhead = useEditor((s) => s.setPlayhead);
   const setPlaying = useEditor((s) => s.setPlaying);
   const stageRef = useRef<HTMLDivElement>(null);
+  const [guide, setGuide] = useState("");
   const [box, setBox] = useState({ w: 640, h: 360 });
   const mediaEls = useRef(new Map<string, HTMLMediaElement>());
   const audioPool = useRef(new Map<string, HTMLAudioElement>());
@@ -146,7 +147,7 @@ export function Preview() {
         audioPool.current.set(c.id, el);
       }
       // Preview approximation of auto-ducking: quieter music while a clip with sound plays.
-      const duck = project.settings.autoDuck && layers.some((l) => project.assets[l.assetId]?.hasAudio) ? 0.3 : 1;
+      const duck = project.settings.autoDuck && !c.dialogue && (audible.some(a => a.dialogue && a.volume > 0) || layers.some(l => l.volume > 0 && project.assets[l.assetId]?.hasAudio)) ? 0.3 : 1;
       syncMedia(el, c, playhead, playing, gainAt(c, playhead) * duck);
     }
     for (const [id, el] of audioPool.current) {
@@ -290,6 +291,7 @@ export function Preview() {
               </div>
             )
           )}
+          {guide && <div aria-label={guide + " safe zone"} style={{ position: "absolute", inset: guide === "Shorts" ? "10% 18% 22% 6%" : "12% 16% 25% 6%", border: "1px dashed white", pointerEvents: "none", zIndex: 5 }} />}
           <CaptionOverlay lines={captionLines} t={playhead} scale={scale} />
           {!layers.length && !texts.length && (
             <div className="empty-state" style={{ position: "absolute", inset: 0 }}>
@@ -299,6 +301,9 @@ export function Preview() {
         </div>
       </div>
       <div className="transport">
+        <select aria-label="Preview safe zone" value={guide} onChange={e => setGuide(e.target.value)}>
+          <option value="">Safe zones off</option><option>Shorts</option><option>Reels</option>
+        </select>
         <button className="icon" title="Start (Home)" onClick={() => setPlayhead(0)}>⏮</button>
         <button className="icon primary" title="Play / pause (Space)" onClick={() => setPlaying(!playing)} disabled={!total}>
           {playing ? "⏸" : "▶"}

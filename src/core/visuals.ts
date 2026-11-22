@@ -312,6 +312,17 @@ export interface IntroTemplate {
 }
 
 export const INTROS: IntroTemplate[] = [
+  {"id": "short-1", "name": "Recipe reveal", "kind": "intro", "bg": "bg-candy", "preset": "pop-title", "text": "Three ingredients", "duration": 2, "overlay": "ov-sparkle"},
+  {"id": "short-2", "name": "Travel diary", "kind": "intro", "bg": "bg-ocean", "preset": "cinematic-title", "text": "A day in...", "duration": 3, "overlay": "ov-lightleak"},
+  {"id": "short-3", "name": "Game replay", "kind": "intro", "bg": "bg-neon", "preset": "neon-title", "text": "Watch the replay", "duration": 1.5, "overlay": "ov-vhs"},
+  {"id": "short-4", "name": "News flash", "kind": "intro", "bg": "bg-mono", "preset": "breaking", "text": "Just in", "duration": 2},
+  {"id": "short-5", "name": "Before and after", "kind": "intro", "bg": "bg-peach", "preset": "slide-title", "text": "Before the change", "duration": 2},
+  {"id": "short-6", "name": "Workout countdown", "kind": "intro", "bg": "bg-sunset", "preset": "pop-title", "text": "Ready in three", "duration": 3, "overlay": "ov-confetti"},
+  {"id": "short-7", "name": "Quick lesson", "kind": "intro", "bg": "bg-forest", "preset": "chapter", "text": "One minute lesson", "duration": 2},
+  {"id": "short-8", "name": "Retro review", "kind": "intro", "bg": "bg-spiral", "preset": "typewriter", "text": "Rewind review", "duration": 2.5, "overlay": "ov-vhs"},
+  {"id": "short-9", "name": "Creator quote", "kind": "intro", "bg": "bg-aurora", "preset": "quote", "text": "Words to remember", "duration": 3, "overlay": "ov-bokeh"},
+  {"id": "short-10", "name": "Product spotlight", "kind": "intro", "bg": "bg-mono", "preset": "lower-third", "text": "Meet the product", "duration": 2, "overlay": "ov-sparkle"},
+
   { id: "intro-pop", name: "Pop title", kind: "intro", bg: "bg-candy", overlay: "ov-sparkle", preset: "pop-title", text: "My Video", duration: 3 },
   { id: "intro-cinema", name: "Cinematic", kind: "intro", bg: "bg-mono", overlay: "ov-lightleak", preset: "cinematic-title", text: "A FILM BY YOU", duration: 4 },
   { id: "intro-neon", name: "Neon", kind: "intro", bg: "bg-neon", overlay: "ov-bokeh", preset: "neon-title", text: "LET'S GO", duration: 3 },

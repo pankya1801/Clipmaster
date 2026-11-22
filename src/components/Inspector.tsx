@@ -1,3 +1,4 @@
+import { extractAudio } from "../lib/actions";
 import { effectById, transitionById, TRANSITIONS } from "../core/effects";
 import { clipDuration, IDENTITY_TRANSFORM, PIP_PRESETS, transformAt, transformPatch, updateClip } from "../core/project";
 import { upsertKeyframe } from "../core/keyframes";
@@ -42,6 +43,7 @@ function MediaInspector({ clip }: { clip: MediaClip }) {
   const asset = useEditor((s) => s.project.assets[clip.assetId]);
   const { commit } = useEditor.getState();
   const set = (patch: Partial<MediaClip>) => commit((p) => updateClip(p, clip.id, patch));
+  const assets = useEditor(s => s.project.assets);
   const dur = clipDuration(clip);
   const visual = asset?.kind !== "audio";
   return (
@@ -50,10 +52,14 @@ function MediaInspector({ clip }: { clip: MediaClip }) {
         <div style={{ fontWeight: 600, wordBreak: "break-all" }}>{asset?.name}</div>
         <div className="muted small">Starts {formatTime(clip.start)} · {formatTime(dur)} long</div>
       </div>
+      <label>Replace footage <select value={clip.assetId} onChange={event => set({ assetId: event.target.value })}>
+        {Object.values(assets).filter(a => a.id === clip.assetId || (a.kind === asset?.kind && (a.kind === "image" || a.duration >= clip.out))).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+      </select></label>
       <Num label="Speed" value={clip.speed} min={0.25} max={4} step={0.05} suffix="×" onChange={(speed) => set({ speed })} />
       {asset?.kind === "video" && <TimeControls clip={clip} />}
       {asset?.hasAudio && (
         <>
+          {asset.kind === "video" && <button onClick={() => void extractAudio(clip)}>Extract audio to track</button>}
           <Num label="Volume" value={clip.volume * 100} min={0} max={200} step={1} suffix="%" onChange={(v) => set({ volume: v / 100 })} />
           <Num label="Audio fade in" value={clip.fadeIn} min={0} max={Math.min(5, dur)} suffix="s" onChange={(fadeIn) => set({ fadeIn })} />
           <Num label="Audio fade out" value={clip.fadeOut} min={0} max={Math.min(5, dur)} suffix="s" onChange={(fadeOut) => set({ fadeOut })} />

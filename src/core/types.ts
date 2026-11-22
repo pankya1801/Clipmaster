@@ -14,6 +14,7 @@ export interface MediaAsset {
   width?: number;
   height?: number;
   hasAudio: boolean;
+  waveform?: number[];
   /** Where stock media came from, for the credits list. */
   credit?: { provider: string; author: string; pageUrl: string };
 }
@@ -42,6 +43,7 @@ export interface MediaClip extends ClipBase {
   in: number;
   out: number;
   speed: number;
+  dialogue?: boolean;
   volume: number; // 0..2 (1 = original)
   fadeIn: number;
   fadeOut: number;

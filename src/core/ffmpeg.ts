@@ -210,7 +210,7 @@ export function buildExportPlan(p: Project, opts: ExportOptions): ExportPlan {
       if (c.type !== "media") continue;
       const asset = p.assets[c.assetId];
       if (!asset?.hasAudio) continue;
-      audioClips.push({ clip: c, input: addInput(asset.path, false, 0), role: "music" });
+      audioClips.push({ clip: c, input: addInput(asset.path, false, 0), role: c.dialogue ? "voice" : "music" });
     }
   }
 

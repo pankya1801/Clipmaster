@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState } from "react";
+import { EFFECTS } from "../core/effects";
+import { updateClip } from "../core/project";
 import { captionTemplate, groupCaptionLines } from "../core/captions";
 import { clipDuration, moveClip, projectDuration, snapTime, trimEnd, trimStart, addTrack, removeTrack, updateTrack } from "../core/project";
 import type { Project, Track } from "../core/types";
@@ -183,6 +185,17 @@ export function Timeline() {
                   return (
                     <div
                       key={c.id}
+                      onDragOver={(event) => {
+                        if (asset && asset.kind !== "audio" && event.dataTransfer.types.includes("application/x-clipmaster-effect")) event.preventDefault();
+                      }}
+                      onDrop={(event) => {
+                        const id = event.dataTransfer.getData("application/x-clipmaster-effect");
+                        if (!asset || asset.kind === "audio" || c.type !== "media" || !EFFECTS.some(effect => effect.id === id)) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (!c.effects.some(effect => effect.id === id)) commit(p => updateClip(p, c.id, { effects: [...c.effects, { id, amount: 0.8 }] }));
+                        select([c.id]);
+                      }}
                       className={`clip ${kind} ${selected.includes(c.id) ? "selected" : ""}`}
                       style={{ left: c.start * zoom, width: Math.max(4, w), backgroundImage: thumb && kind !== "audio" ? `url(${thumb})` : undefined }}
                       onPointerDown={(e) => startClipDrag(e, c.id, "move")}
@@ -194,6 +207,9 @@ export function Timeline() {
                       {c.type === "media" &&
                         c.keyframes?.map((k) => <span key={k.t} className="kf-dot" style={{ left: k.t * zoom - 4 }} />)}
                       <div className="handle l" onPointerDown={(e) => startClipDrag(e, c.id, "trim-l")} />
+                      {asset?.waveform?.length && <svg width="100%" height="18" preserveAspectRatio="none" viewBox={`0 0 ${asset.waveform.length} 2`} aria-label="Audio waveform" style={{position:"absolute", bottom:0, pointerEvents:"none"}}>
+                        {asset.waveform.map((peak, i) => <line key={i} x1={i} x2={i} y1={1-peak} y2={1+peak} stroke="currentColor" />)}
+                      </svg>}
                       <div className="clip-label">
                         {c.type === "text" ? `T ${c.text}` : `${asset?.name ?? "missing"}${c.type === "media" && c.speed !== 1 ? ` · ${c.speed}×` : ""}`}
                       </div>

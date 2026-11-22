@@ -20,7 +20,7 @@ export interface AutoEditOptions {
   /** Ignore kept pieces shorter than this (seconds). */
   minKeep: number;
   punchIn: boolean;
-  transition: "none" | "flash" | "fade-in" | "zoom-pop";
+  transition: "adaptive" | "none" | "flash" | "fade-in" | "zoom-pop";
   look: string | null; // effect id, e.g. "cinematic"
 }
 
@@ -89,6 +89,8 @@ export function applyAutoEdit(
   let removed = 0;
   let cuts = 0;
   let k = 0;
+  let lastAccent = -Infinity;
+  let accents = 0;
   for (const c of source) {
     if (c.type !== "media") continue;
     const asset = p.assets[c.assetId];
@@ -110,10 +112,16 @@ export function applyAutoEdit(
         transOut: i === pieces.length - 1 ? c.transOut : undefined,
         effects: [...(c.effects ?? [])],
       };
-      if (k > 0 && opts.transition !== "none") piece.transIn = { id: opts.transition, duration: opts.transition === "flash" ? 0.15 : 0.25 };
-      piece.effects = piece.effects.filter((e) => e.id !== "punch-in");
-      if (opts.punchIn && k % 2 === 1) piece.effects.push({ id: "punch-in", amount: 0.5 });
-      if (opts.look && !piece.effects.some((e) => e.id === opts.look)) piece.effects.push({ id: opts.look, amount: 0.7 });
+      const visual = asset && asset.kind !== "audio";
+      const adaptive = opts.transition === "adaptive";
+      if (adaptive && visual && k > 0 && !piece.transIn && t - lastAccent >= 3 && clipDuration(piece) >= 0.65) {
+        piece.transIn = { id: accents % 2 === 0 ? "zoom-pop" : "fade-in", duration: 0.16 };
+        lastAccent = t;
+        accents++;
+      }
+      if (visual && k > 0 && opts.transition !== "adaptive" && opts.transition !== "none") piece.transIn = { id: opts.transition, duration: opts.transition === "flash" ? 0.15 : 0.25 };
+      if (visual && opts.punchIn && k % 2 === 1 && !piece.effects.some(e => e.id === "punch-in") && (!adaptive || (!piece.transIn && clipDuration(piece) >= 0.8))) piece.effects.push({ id: "punch-in", amount: 0.5 });
+      if (visual && opts.look && !piece.effects.some((e) => e.id === opts.look)) piece.effects.push({ id: opts.look, amount: 0.7 });
       clips[piece.id] = piece;
       t += clipDuration(piece);
       k++;

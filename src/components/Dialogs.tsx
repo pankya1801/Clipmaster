@@ -49,6 +49,11 @@ export const EXPORT_PRESETS: { id: string; name: string; res: number; quality: E
 
 export function ExportDialog({ onClose }: { onClose: () => void }) {
   const project = useEditor((s) => s.project);
+  const [covers, setCovers] = useState(false);
+  const [shortsFrame, setShortsFrame] = useState(0);
+  const [reelsFrame, setReelsFrame] = useState(0);
+  const [shortsY, setShortsY] = useState(0.70);
+  const [reelsY, setReelsY] = useState(0.65);
   const [quality, setQuality] = useState<ExportQuality>("standard");
   const [res, setRes] = useState(0);
   const [loudness, setLoudness] = useState(true);
@@ -75,10 +80,13 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
     return () => un?.();
   }, [total]);
 
-  const start = async () => {
+  const start = async (paired = false) => {
     const f = FORMATS.find((x) => x.id === format)!;
-    const out = await saveDialog(`${project.name}.${format}`, format, f.filter);
+    const out = paired ? await saveDialog(`${project.name}-Shorts.mp4`, "mp4", "YouTube Shorts") : await saveDialog(`${project.name}.${format}`, format, f.filter);
     if (!out) return;
+    const reels = paired ? await saveDialog(`${project.name}-Reels.mp4`, "mp4", "Instagram Reels") : null;
+    if (paired && !reels) return;
+    if (reels?.toLowerCase() === out.toLowerCase()) { setStatus("Choose separate output files."); return; }
     try {
       setStatus("Exporting…");
       setProgress(0);
@@ -86,17 +94,27 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
       const fontFile = fontsDir ? `${fontsDir}/Montserrat-ExtraBold.ttf` : undefined;
       const needsVoiceModel = Object.values(project.clips).some((c) => c.type === "media" && c.studioVoice);
       const voiceModel = needsVoiceModel ? await invoke<string>("voice_model").catch(() => undefined) : undefined;
-      const plan = buildExportPlan(project, { outputPath: out, tempDir, quality, fontsDir: fontsDir ?? undefined, fontFile, normalizeLoudness: loudness, format, voiceModel, ...size });
-      await invoke("export_video", { args: plan.args, files: plan.files });
+      for (const path of reels ? [out, reels] : [out]) {
+        const variant = paired ? { ...project, captionSettings: { ...project.captionSettings, y: path === reels ? reelsY : shortsY } } : project;
+        const plan = buildExportPlan(variant, { outputPath: path, tempDir, quality, fontsDir: fontsDir ?? undefined, fontFile, normalizeLoudness: loudness, format: paired ? "mp4" : format, voiceModel, ...(paired ? { width: 1080, height: 1920 } : size) });
+        await invoke("export_video", { args: plan.args, files: plan.files });
+        if (paired && covers) {
+          const cover = await saveDialog(path.replace(/\.mp4$/i, "") + "-cover.jpg", "jpg", "Cover image");
+          if (cover) {
+            const time = Math.max(0, Math.min(total - 1 / project.settings.fps, path === reels ? reelsFrame : shortsFrame));
+            await invoke("run_ffmpeg", { args: ["-nostdin", "-y", "-ss", String(time), "-i", path, "-frames:v", "1", "-q:v", "2", cover] });
+          }
+        }
+      }
       setProgress(1);
-      setStatus(`Saved to ${out}`);
+      setStatus(`Saved to ${[out, reels].filter(Boolean).join(" and ")}`);
     } catch (e) {
       setProgress(null);
       setStatus(`Export failed: ${errorText(e)}`);
     }
   };
 
-  const running = progress != null && progress < 1 && status === "Exporting…";
+  const running = progress != null && status === "Exporting…";
   return (
     <Modal title="Export video" onClose={() => !running && onClose()}>
       {!isTauri && <p className="banner">Export needs the Clipmaster desktop app (it uses FFmpeg on your computer).</p>}
@@ -138,7 +156,15 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
         ) : (
           <>
             <button onClick={onClose}>Close</button>
-            <button className="primary" onClick={start} disabled={!isTauri || total <= 0}>Export</button>
+            <details><summary>Shorts and Reels</summary>
+              <label>Shorts caption height <input type="range" min="0.1" max="0.9" step="0.01" value={shortsY} onChange={e => setShortsY(Number(e.target.value))} /></label>
+              <label>Reels caption height <input type="range" min="0.1" max="0.9" step="0.01" value={reelsY} onChange={e => setReelsY(Number(e.target.value))} /></label>
+              <label><input type="checkbox" checked={covers} onChange={e => setCovers(e.target.checked)} />Save cover images</label>
+              {covers && <><label>Shorts cover (seconds)<input type="number" min="0" max={total} step="0.1" value={shortsFrame} onChange={e => setShortsFrame(Number(e.target.value))} /></label>
+                <label>Reels cover (seconds)<input type="number" min="0" max={total} step="0.1" value={reelsFrame} onChange={e => setReelsFrame(Number(e.target.value))} /></label></>}
+              <button disabled={!isTauri || total <= 0} onClick={() => start(true)}>Export both MP4s</button>
+            </details>
+            <button className="primary" onClick={() => start()} disabled={!isTauri || total <= 0}>Export</button>
           </>
         )}
       </div>
@@ -149,17 +175,19 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
 export function AutoEditDialog({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<"talk" | "music">("talk");
   const [beat, setBeat] = useState({ everyBeats: 2, muteClips: true, punchIn: true, flash: false });
-  const [opts, setOpts] = useState<AutoEditRun>({
+  const baseOptions: AutoEditRun = {
     ...DEFAULT_AUTO_EDIT, captions: true, noiseDb: -35, minSilence: 0.45, duck: true, autoZoom: true,
     fillers: true, softFillers: false, broll: false, highlight: false, vertical: false,
-  });
-  const [preset, setPreset] = useState<string | null>(null);
+  };
+  const shorts = AUTO_EDIT_PRESETS.find(p => p.id === "shorts")!;
+  const [opts, setOpts] = useState<AutoEditRun>({ ...baseOptions, ...shorts.talk });
+  const [preset, setPreset] = useState<string | null>(shorts.id);
   const applyPreset = (id: string) => {
     const pr = AUTO_EDIT_PRESETS.find((x) => x.id === id);
     if (!pr) return;
     setPreset(id);
     setMode(pr.mode);
-    if (pr.talk) setOpts((o) => ({ ...o, ...pr.talk }));
+    if (pr.talk) setOpts({ ...baseOptions, ...pr.talk });
     if (pr.music) setBeat((b) => ({ ...b, ...pr.music }));
   };
   const [busy, setBusy] = useState<string | null>(null);
@@ -223,6 +251,7 @@ export function AutoEditDialog({ onClose }: { onClose: () => void }) {
             <option value="none">None (jump cut)</option>
             <option value="flash">Flash</option>
             <option value="fade-in">Fade</option>
+            <option value="adaptive">Adaptive accents</option>
             <option value="zoom-pop">Zoom pop</option>
           </select></label>
         <label className="field grow"><span>Colour look</span>

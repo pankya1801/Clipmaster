@@ -57,6 +57,16 @@ describe("auto edit", () => {
   it("keeps speech with padding", () => {
     expect(keptRanges(0, 10, [{ start: 2, end: 4 }], 0.1, 0.3)).toEqual([{ start: 0, end: 2.1 }, { start: 3.9, end: 10 }]);
   });
+  it("spaces adaptive transitions across speech cuts and grades each shot", () => {
+    let p = addAsset(createProject(), { id: "v", path: "/v.mp4", name: "v", kind: "video", duration: 10, hasAudio: true });
+    p = placeAsset(p, "v", "t_v1").project;
+    const pauses = [{ start: 1, end: 2 }, { start: 3, end: 4 }, { start: 7, end: 8 }];
+    const result = applyAutoEdit(p, { v: pauses }, { ...DEFAULT_AUTO_EDIT, transition: "adaptive", look: "vivid", padding: 0 });
+    const cuts = clipsOnTrack(result.project, "t_v1") as MediaClip[];
+    expect(result.removedSeconds).toBe(3);
+    expect(cuts.map(c => c.transIn?.id)).toEqual([undefined, "zoom-pop", undefined, "fade-in"]);
+    expect(cuts.every(c => c.effects.some(effect => effect.id === "vivid"))).toBe(true);
+  });
   it("jump-cuts the main track and alternates punch-ins", () => {
     let p = addAsset(createProject(), { id: "v", path: "/v.mp4", name: "v", kind: "video", duration: 10, hasAudio: true });
     p = placeAsset(p, "v", "t_v1").project;
